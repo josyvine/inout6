@@ -2,21 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions required for Firebase, QR Scanning, and Check-In Logic -->
+    <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    
-    <!-- Camera permission for QR Scanning (Employee) -->
     <uses-permission android:name="android.permission.CAMERA" />
-    
-    <!-- Location permissions for Geofencing Check-In -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    
-    <!-- Biometric permission for Fingerprint Verification -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
-    <!-- Features used by the app -->
     <uses-feature android:name="android.hardware.camera" android:required="true" />
     <uses-feature android:name="android.hardware.location.gps" android:required="true" />
 
@@ -30,7 +23,7 @@
         android:theme="@style/AppTheme"
         tools:targetApi="31">
 
-        <!-- 1. Splash Screen - The Entry Point -->
+        <!-- 1. Splash Screen -->
         <activity
             android:name=".SplashActivity"
             android:exported="true"
@@ -42,48 +35,24 @@
             </intent-filter>
         </activity>
 
-        <!-- 2. Role Selection (Admin vs Employee) -->
-        <activity
-            android:name=".RoleSelectionActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
+        <activity android:name=".RoleSelectionActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".LoginActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".AdminSetupActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".AdminDashboardActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".EmployeeQrScanActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".EmployeeProfileActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".EmployeeDashboardActivity" android:exported="false" android:screenOrientation="portrait" />
 
-        <!-- 3. Common Login Activity (Google Sign-In) -->
-        <activity
-            android:name=".LoginActivity"
+        <!-- FILE PROVIDER (NEW): Required for QR Image Sharing -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.inout.app.fileprovider"
             android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- 4. Admin Setup (Upload Firebase JSON) -->
-        <activity
-            android:name=".AdminSetupActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- 5. Admin Dashboard - FIXED: Now correctly uses the NoActionBar theme from the application tag -->
-        <activity
-            android:name=".AdminDashboardActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- 6. Employee QR Scan (First time setup) -->
-        <activity
-            android:name=".EmployeeQrScanActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- 7. Employee Profile Setup -->
-        <activity
-            android:name=".EmployeeProfileActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- 8. Employee Dashboard - FIXED: Now correctly uses the NoActionBar theme -->
-        <activity
-            android:name=".EmployeeDashboardActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 
