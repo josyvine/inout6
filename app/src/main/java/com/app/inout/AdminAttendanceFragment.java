@@ -29,6 +29,8 @@ import java.util.List;
  * Admin view for Attendance.
  * 1. Select employee from Spinner.
  * 2. View monthly records in a CSV-style horizontal table.
+ * 
+ * CRITICAL: Requires a Composite Index in Firestore Console.
  */
 public class AdminAttendanceFragment extends Fragment {
 
@@ -83,6 +85,7 @@ public class AdminAttendanceFragment extends Fragment {
                         User user = doc.toObject(User.class);
                         if (user != null) {
                             employees.add(user);
+                            // Format: Name (EmployeeID)
                             employeeNames.add(user.getName() + " (" + user.getEmployeeId() + ")");
                         }
                     }
@@ -105,7 +108,7 @@ public class AdminAttendanceFragment extends Fragment {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (position > 0) {
-                    // Position 0 is the hint
+                    // Offset by 1 because of the hint at position 0
                     User selectedUser = employees.get(position - 1);
                     loadAttendanceForEmployee(selectedUser);
                 } else {
@@ -122,11 +125,14 @@ public class AdminAttendanceFragment extends Fragment {
 
     /**
      * Loads attendance logs for a specific employee from Firestore.
+     * Note: This query triggers the "Error loading logs" if the Index is missing.
      */
     private void loadAttendanceForEmployee(User user) {
+        if (user.getEmployeeId() == null) return;
+        
         binding.progressBar.setVisibility(View.VISIBLE);
         
-        // Query logs for the selected employee, ordered by timestamp descending
+        // Query: Filter by employeeId AND Sort by timestamp
         db.collection("attendance")
                 .whereEqualTo("employeeId", user.getEmployeeId())
                 .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -134,8 +140,9 @@ public class AdminAttendanceFragment extends Fragment {
                     binding.progressBar.setVisibility(View.GONE);
                     
                     if (error != null) {
-                        Log.e(TAG, "Error listening for logs", error);
-                        Toast.makeText(getContext(), "Error loading logs", Toast.LENGTH_SHORT).show();
+                        Log.e(TAG, "Firestore error: " + error.getMessage());
+                        // This error occurs because a Composite Index is missing in Firebase
+                        Toast.makeText(getContext(), "Error loading logs. Check Indexing.", Toast.LENGTH_LONG).show();
                         return;
                     }
 
