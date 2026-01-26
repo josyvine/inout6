@@ -75,6 +75,10 @@ dependencies {
     // FIX: Guava library is required for ListenableFuture (used by CameraX)
     implementation 'com.google.guava:guava:31.1-android'
 
+    // FIX: Glide library for Profile Photos
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+
     implementation 'com.google.mlkit:barcode-scanning:17.2.0'
     implementation 'com.google.zxing:core:3.5.2'
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
