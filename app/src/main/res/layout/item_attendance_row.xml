@@ -9,7 +9,7 @@
     android:paddingHorizontal="4dp"
     android:gravity="center_vertical">
 
-    <!-- 1. Date -->
+    <!-- 1. Date --> 
     <TextView
         android:id="@+id/tv_col_date"
         android:layout_width="100dp"
