@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white">
+
+    <!-- 1. FIXED HEADER SECTION (CV-STYLE) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/card_header"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:cardElevation="8dp"
+        app:cardCornerRadius="0dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="20dp"
+            android:background="@color/light_gray">
+
+            <!-- Circular Profile Photo -->
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/iv_profile_photo"
+                android:layout_width="90dp"
+                android:layout_height="90dp"
+                android:padding="2dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/inout"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.MaterialComponents.SmallComponent"
+                app:strokeColor="@color/teal_700"
+                app:strokeWidth="2dp" />
+
+            <!-- Employee Details (Right of photo) -->
+            <LinearLayout
+                android:id="@+id/layout_details"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:orientation="vertical"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@+id/iv_profile_photo"
+                app:layout_constraintTop_toTopOf="@+id/iv_profile_photo">
+
+                <TextView
+                    android:id="@+id/tv_header_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Employee Name"
+                    android:textColor="@android:color/black"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_header_id"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ID: EMP000"
+                    android:textColor="@color/dark_gray"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/tv_header_phone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Phone: +00 00000000"
+                    android:textColor="@color/dark_gray"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/tv_header_company"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Company Name"
+                    android:textColor="@color/teal_700"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_header_month"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_status_box"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="4dp"
+                android:text="January 2026"
+                android:textColor="@android:color/black"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                app:layout_constraintStart_toStartOf="@+id/iv_profile_photo"
+                app:layout_constraintTop_toBottomOf="@+id/iv_profile_photo" />
+
+            <!-- Close Button (Top Right) -->
+            <ImageButton
+                android:id="@+id/btn_close"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:tint="@android:color/black" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- 2. SCROLLABLE ATTENDANCE TABLE AREA -->
+    <HorizontalScrollView
+        android:id="@+id/horizontal_scroll"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scrollbars="horizontal|vertical"
+        app:layout_constraintBottom_toTopOf="@+id/btn_export_csv"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/card_header">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <!-- Table Header Row (Fixed Columns width) -->
+            <include
+                android:id="@+id/layout_table_header"
+                layout="@layout/layout_attendance_table_header" />
+
+            <!-- Table Data Rows -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_attendance_table"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                tools:listitem="@layout/item_attendance_row" />
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- Export Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_export_csv"
+        android:layout_width="0dp"
+        android:layout_height="60dp"
+        android:layout_margin="16dp"
+        android:text="EXPORT MONTHLY CSV"
+        android:textStyle="bold"
+        app:cornerRadius="12dp"
+        app:icon="@android:drawable/ic_menu_save"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
