@@ -3,46 +3,49 @@ package com.inout.app.models;
 import com.google.firebase.firestore.IgnoreExtraProperties;
 
 /**
- * Model class for a daily attendance record.
- * Stored in Firestore under: attendance/{employeeId}/{dateId}
- * or in a root collection: attendance_logs (depending on query needs).
- * We will use a root collection for easier Admin queries: attendance/{recordId}
+ * Updated Model class for a daily attendance record.
+ * Includes all columns required for professional CSV proof.
  */
 @IgnoreExtraProperties
 public class AttendanceRecord {
 
-    private String recordId;        // Typically composite: employeeId_date
+    private String recordId;        
     private String employeeId;
-    private String employeeName;    // Denormalized for easier display in lists
+    private String employeeName;    
     private String date;            // YYYY-MM-DD
+    private String dayOfWeek;       // Monday, Tuesday, etc.
     
-    private String checkInTime;     // Display format (e.g., 09:00 AM)
+    private String checkInTime;     
     private double checkInLat;
     private double checkInLng;
     
-    private String checkOutTime;    // Display format (e.g., 05:00 PM)
+    private String checkOutTime;    
     private double checkOutLat;
     private double checkOutLng;
     
     private String totalHours;
+    private String locationName;    // The office name assigned
+    private float distanceMeters;   // Distance from target at check-in
     
     // Security flags
     private boolean fingerprintVerified;
-    private boolean locationVerified;
+    private boolean gpsVerified; // Renamed from locationVerified for clarity
     
-    private long timestamp; // Unix timestamp for sorting
+    private long timestamp; 
 
     public AttendanceRecord() {
         // Default constructor required for Firestore
     }
 
-    public AttendanceRecord(String employeeId, String employeeName, String date, long timestamp) {
-        this.employeeId = employeeId;
-        this.employeeName = employeeName;
-        this.date = date;
-        this.timestamp = timestamp;
-        this.fingerprintVerified = true; // Always true if created via the app logic
-        this.locationVerified = true;    // Always true if created via the app logic
+    // Helper to determine status for the UI logic
+    public String getStatus() {
+        if (checkInTime != null && checkOutTime != null && fingerprintVerified && gpsVerified) {
+            return "Present";
+        } else if (checkInTime != null) {
+            return "Partial";
+        } else {
+            return "Absent";
+        }
     }
 
     // Getters and Setters
@@ -77,6 +80,14 @@ public class AttendanceRecord {
 
     public void setDate(String date) {
         this.date = date;
+    }
+
+    public String getDayOfWeek() {
+        return dayOfWeek;
+    }
+
+    public void setDayOfWeek(String dayOfWeek) {
+        this.dayOfWeek = dayOfWeek;
     }
 
     public String getCheckInTime() {
@@ -135,6 +146,22 @@ public class AttendanceRecord {
         this.totalHours = totalHours;
     }
 
+    public String getLocationName() {
+        return locationName;
+    }
+
+    public void setLocationName(String locationName) {
+        this.locationName = locationName;
+    }
+
+    public float getDistanceMeters() {
+        return distanceMeters;
+    }
+
+    public void setDistanceMeters(float distanceMeters) {
+        this.distanceMeters = distanceMeters;
+    }
+
     public boolean isFingerprintVerified() {
         return fingerprintVerified;
     }
@@ -143,12 +170,12 @@ public class AttendanceRecord {
         this.fingerprintVerified = fingerprintVerified;
     }
 
-    public boolean isLocationVerified() {
-        return locationVerified;
+    public boolean isGpsVerified() {
+        return gpsVerified;
     }
 
-    public void setLocationVerified(boolean locationVerified) {
-        this.locationVerified = locationVerified;
+    public void setGpsVerified(boolean gpsVerified) {
+        this.gpsVerified = gpsVerified;
     }
 
     public long getTimestamp() {
