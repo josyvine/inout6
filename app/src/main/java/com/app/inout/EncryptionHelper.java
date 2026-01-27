@@ -72,6 +72,14 @@ public class EncryptionHelper {
         return sharedPreferences.getString(KEY_USER_ROLE, null);
     }
 
+    /**
+     * NEW: Clears only the User Role.
+     * Used during Logout to force the user back to the "Select Role" screen.
+     */
+    public void clearUserRole() {
+        sharedPreferences.edit().remove(KEY_USER_ROLE).apply();
+    }
+
     public void saveFirebaseConfig(String jsonConfig, String companyName, String projectId) {
         sharedPreferences.edit()
                 .putString(KEY_FIREBASE_CONFIG, jsonConfig)
