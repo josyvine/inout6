@@ -1,5 +1,6 @@
 package com.inout.app;
 
+import android.app.AlertDialog;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -14,26 +15,36 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.WriteBatch;
 import com.inout.app.databinding.FragmentAdminLocationsBinding;
 import com.inout.app.models.CompanyConfig;
 import com.inout.app.utils.LocationHelper;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class AdminLocationsFragment extends Fragment {
+/**
+ * Updated Fragment for Office Locations.
+ * Features: Remote Search, GPS Capture, and Interactive Selection/Deletion.
+ */
+public class AdminLocationsFragment extends Fragment implements LocationAdapter.OnLocationActionListener {
 
     private static final String TAG = "AdminLocationsFrag";
     private FragmentAdminLocationsBinding binding;
     private FirebaseFirestore db;
     private LocationHelper locationHelper;
+    
+    private LocationAdapter adapter;
+    private List<CompanyConfig> savedLocations;
     
     private double capturedLat = 0;
     private double capturedLng = 0;
@@ -50,13 +61,21 @@ public class AdminLocationsFragment extends Fragment {
 
         db = FirebaseFirestore.getInstance();
         locationHelper = new LocationHelper(requireContext());
+        savedLocations = new ArrayList<>();
 
+        setupRecyclerView();
         setupClickListeners();
         listenForLocations();
     }
 
+    private void setupRecyclerView() {
+        binding.rvLocations.setLayoutManager(new LinearLayoutManager(getContext()));
+        adapter = new LocationAdapter(savedLocations, this);
+        binding.rvLocations.setAdapter(adapter);
+    }
+
     private void setupClickListeners() {
-        // NEW: Search Button Logic
+        // Search Button Logic
         binding.btnSearchLocation.setOnClickListener(v -> {
             String address = binding.etSearchAddress.getText().toString().trim();
             if (!TextUtils.isEmpty(address)) {
@@ -66,30 +85,24 @@ public class AdminLocationsFragment extends Fragment {
             }
         });
 
-        // Original: Capture current GPS logic
+        // Capture current GPS logic
         binding.btnCaptureGps.setOnClickListener(v -> captureCurrentLocation());
 
         // Save logic
         binding.btnSaveLocation.setOnClickListener(v -> saveLocationToFirestore());
     }
 
-    /**
-     * Uses Android Geocoder to find coordinates for a text address.
-     */
     private void searchLocationByAddress(String addressString) {
         binding.progressBar.setVisibility(View.VISIBLE);
-        
         Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
         try {
             List<Address> addresses = geocoder.getFromLocationName(addressString, 1);
             if (addresses != null && !addresses.isEmpty()) {
                 Address result = addresses.get(0);
-                
                 capturedLat = result.getLatitude();
                 capturedLng = result.getLongitude();
 
-                // Auto-fill the UI
-                String foundName = result.getFeatureName(); // e.g. "Canara Bank"
+                String foundName = result.getFeatureName(); 
                 binding.etLocationName.setText(foundName);
                 
                 binding.tvCapturedCoords.setText(String.format("Found: %s\nLat: %.6f | Lng: %.6f", 
@@ -98,11 +111,11 @@ public class AdminLocationsFragment extends Fragment {
                 
                 Toast.makeText(getContext(), "Location Found", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(getContext(), "Address not found. Try adding city name.", Toast.LENGTH_LONG).show();
+                Toast.makeText(getContext(), "Address not found.", Toast.LENGTH_LONG).show();
             }
         } catch (IOException e) {
             Log.e(TAG, "Geocoder error", e);
-            Toast.makeText(getContext(), "Search error. Check internet connection.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "Search error. Check connection.", Toast.LENGTH_SHORT).show();
         } finally {
             binding.progressBar.setVisibility(View.GONE);
         }
@@ -121,10 +134,8 @@ public class AdminLocationsFragment extends Fragment {
                 if (location != null) {
                     capturedLat = location.getLatitude();
                     capturedLng = location.getLongitude();
-                    
                     binding.tvCapturedCoords.setText(String.format("Current GPS:\nLat: %.6f | Lng: %.6f", capturedLat, capturedLng));
                     binding.tvCapturedCoords.setVisibility(View.VISIBLE);
-                    Toast.makeText(getContext(), "Current Location Captured", Toast.LENGTH_SHORT).show();
                 }
             }
 
@@ -139,31 +150,24 @@ public class AdminLocationsFragment extends Fragment {
 
     private void saveLocationToFirestore() {
         String locName = binding.etLocationName.getText().toString().trim();
-
         if (TextUtils.isEmpty(locName)) {
-            binding.etLocationName.setError("Location Name is required");
+            binding.etLocationName.setError("Location Name required");
             return;
         }
-
         if (capturedLat == 0 || capturedLng == 0) {
-            Toast.makeText(getContext(), "Please find a location first", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "Capture coordinates first", Toast.LENGTH_SHORT).show();
             return;
         }
 
         binding.progressBar.setVisibility(View.VISIBLE);
-
         CompanyConfig config = new CompanyConfig(locName, capturedLat, capturedLng);
 
         db.collection("locations")
                 .add(config)
-                .addOnSuccessListener(documentReference -> {
+                .addOnSuccessListener(doc -> {
                     binding.progressBar.setVisibility(View.GONE);
-                    Toast.makeText(getContext(), "Location Saved Successfully", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "Location Saved", Toast.LENGTH_SHORT).show();
                     clearInputs();
-                })
-                .addOnFailureListener(e -> {
-                    binding.progressBar.setVisibility(View.GONE);
-                    Toast.makeText(getContext(), "Failed to save: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
     }
 
@@ -172,29 +176,58 @@ public class AdminLocationsFragment extends Fragment {
         binding.etSearchAddress.setText("");
         binding.tvCapturedCoords.setText("");
         binding.tvCapturedCoords.setVisibility(View.GONE);
-        capturedLat = 0;
-        capturedLng = 0;
+        capturedLat = 0; capturedLng = 0;
     }
 
     private void listenForLocations() {
         db.collection("locations")
-                .addSnapshotListener(new EventListener<QuerySnapshot>() {
-                    @Override
-                    public void onEvent(@Nullable QuerySnapshot value, @Nullable FirebaseFirestoreException error) {
-                        if (error != null) return;
-
-                        if (value != null) {
-                            StringBuilder sb = new StringBuilder("Saved Locations:\n");
-                            for (DocumentSnapshot doc : value) {
-                                CompanyConfig config = doc.toObject(CompanyConfig.class);
-                                if (config != null) {
-                                    sb.append("- ").append(config.getName()).append("\n");
-                                }
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    if (value != null) {
+                        savedLocations.clear();
+                        for (DocumentSnapshot doc : value) {
+                            CompanyConfig config = doc.toObject(CompanyConfig.class);
+                            if (config != null) {
+                                config.setId(doc.getId());
+                                savedLocations.add(config);
                             }
-                            binding.tvLocationList.setText(sb.toString());
                         }
+                        adapter.notifyDataSetChanged();
                     }
                 });
+    }
+
+    /**
+     * NEW: Implementation of the Delete logic via Long Press.
+     */
+    @Override
+    public void onDeleteRequested(List<CompanyConfig> selectedLocations) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Delete Locations")
+                .setMessage("Delete " + selectedLocations.size() + " selected office locations?")
+                .setPositiveButton("Delete All", (dialog, which) -> {
+                    performBulkDelete(selectedLocations);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void performBulkDelete(List<CompanyConfig> selections) {
+        binding.progressBar.setVisibility(View.VISIBLE);
+        WriteBatch batch = db.batch();
+        
+        for (CompanyConfig loc : selections) {
+            batch.delete(db.collection("locations").document(loc.getId()));
+        }
+
+        batch.commit().addOnSuccessListener(aVoid -> {
+            binding.progressBar.setVisibility(View.GONE);
+            Toast.makeText(getContext(), "Locations deleted successfully.", Toast.LENGTH_SHORT).show();
+            adapter.clearSelection();
+        }).addOnFailureListener(e -> {
+            binding.progressBar.setVisibility(View.GONE);
+            Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        });
     }
 
     @Override
