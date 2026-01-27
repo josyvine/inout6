@@ -35,7 +35,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tv_title" />
 
-        <!-- SEARCH SECTION (NEW) -->
+        <!-- SEARCH SECTION -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/card_search"
             android:layout_width="0dp"
@@ -177,18 +177,18 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/card_add_location" />
 
-        <TextView
-            android:id="@+id/tv_location_list"
+        <!-- UPDATED: RECYCLERVIEW FOR INTERACTIVE LIST -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_locations"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:background="@android:color/white"
-            android:padding="16dp"
-            android:text="Loading saved locations..."
-            android:textColor="@android:color/black"
+            android:clipToPadding="false"
+            android:nestedScrollingEnabled="false"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/tv_list_label" />
+            app:layout_constraintTop_toBottomOf="@+id/tv_list_label"
+            tools:listitem="@layout/item_location" />
 
         <ProgressBar
             android:id="@+id/progress_bar"
