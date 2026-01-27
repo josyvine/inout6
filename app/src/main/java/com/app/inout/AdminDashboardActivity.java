@@ -14,6 +14,7 @@ import androidx.navigation.ui.NavigationUI;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.inout.app.databinding.ActivityAdminDashboardBinding;
+import com.inout.app.utils.EncryptionHelper;
 
 public class AdminDashboardActivity extends AppCompatActivity {
 
@@ -30,15 +31,12 @@ public class AdminDashboardActivity extends AppCompatActivity {
         setSupportActionBar(binding.toolbar);
 
         // Setup Navigation Component
-        // The NavHostFragment is defined in the XML layout (to be created later)
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.nav_host_fragment_admin);
         
         if (navHostFragment != null) {
             NavController navController = navHostFragment.getNavController();
             
-            // Define top-level destinations (screens that shouldn't show a 'Back' arrow)
-            // IDs must match the menu/bottom_nav_menu.xml and mobile_navigation.xml
             AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(
                     R.id.nav_admin_employees, 
                     R.id.nav_admin_attendance, 
@@ -51,14 +49,12 @@ public class AdminDashboardActivity extends AppCompatActivity {
         }
     }
 
-    // Create the top options menu (e.g., Logout)
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.admin_top_menu, menu);
         return true;
     }
 
-    // Handle menu clicks
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == R.id.action_logout) {
@@ -71,11 +67,22 @@ public class AdminDashboardActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    /**
+     * UPDATED: Full Logout Logic.
+     * 1. Signs out of Firebase.
+     * 2. Clears the "Admin" role from local storage.
+     * 3. Returns to the absolute landing page (Splash/Role Selection).
+     */
     private void logout() {
+        // Sign out from Firebase
         mAuth.signOut();
-        // Go back to Splash/Role Selection
+        
+        // Clear the stored Role (Admin) so they must declare it again
+        EncryptionHelper.getInstance(this).clearUserRole();
+        
+        // Return to SplashActivity and clear the activity history stack
         Intent intent = new Intent(this, SplashActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
     }
@@ -83,6 +90,8 @@ public class AdminDashboardActivity extends AppCompatActivity {
     private void switchCompany() {
         // To switch company, we go back to the Setup screen
         mAuth.signOut();
+        // Note: For switching company, we might not clear the role, 
+        // just go back to AdminSetupActivity.
         Intent intent = new Intent(this, AdminSetupActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
