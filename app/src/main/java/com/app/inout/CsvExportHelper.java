@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * Utility to generate and share professional attendance reports.
- * Matches the 10-column table layout exactly.
+ * UPDATED: Matches the 11-column table layout (Includes Transit Route).
  */
 public class CsvExportHelper {
 
@@ -32,15 +32,19 @@ public class CsvExportHelper {
      */
     public static void exportAttendanceToCsv(Context context, List<AttendanceRecord> records, String fileName) {
         
-        // 1. Create the CSV Header Row (10 Columns)
+        // 1. Create the CSV Header Row (11 Columns)
         StringBuilder csvData = new StringBuilder();
-        csvData.append("Date,Day,CheckIn,CheckOut,TotalHours,Location,DistanceMeters,FingerprintVerified,GPSVerified,Status\n");
+        csvData.append("Date,Day,CheckIn,TransitRoute,CheckOut,TotalHours,Location,DistanceMeters,FingerprintVerified,GPSVerified,Status\n");
 
         // 2. Loop through all records and format rows
         for (AttendanceRecord record : records) {
             String date = record.getDate();
             String day = record.getDayOfWeek();
             String in = (record.getCheckInTime() != null) ? record.getCheckInTime() : "--";
+            
+            // NEW: Get Transit Route string
+            String transit = record.getTransitSummary();
+            
             String out = (record.getCheckOutTime() != null) ? record.getCheckOutTime() : "--";
             String hours = (record.getTotalHours() != null) ? record.getTotalHours() : "0h 00m";
             String location = (record.getLocationName() != null) ? record.getLocationName() : "N/A";
@@ -53,10 +57,12 @@ public class CsvExportHelper {
             // Handle Proof logic for status
             String status = record.getStatus();
 
-            // Append row to string (escaped with quotes for names/locations containing commas)
+            // Append row to string 
+            // Note: Transit and Location are wrapped in quotes to handle special characters safely
             csvData.append(date).append(",")
                     .append(day).append(",")
                     .append(in).append(",")
+                    .append("\"").append(transit).append("\",")
                     .append(out).append(",")
                     .append(hours).append(",")
                     .append("\"").append(location).append("\",")
