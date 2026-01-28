@@ -14,6 +14,9 @@ import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
@@ -135,20 +138,30 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
     /**
      * UPDATED: Full Logout Logic.
      * 1. Signs out of Firebase.
-     * 2. Clears the "Employee" role from local storage.
-     * 3. Returns to the absolute landing page (Splash/Role Selection).
+     * 2. Signs out of Google (forces account picker for next login).
+     * 3. Clears the "Employee" role from local storage.
+     * 4. Returns to the absolute landing page (Splash/Role Selection).
      */
     private void logout() {
-        // Sign out from Firebase
+        // 1. Sign out from Firebase
         mAuth.signOut();
 
-        // Clear the stored Role (Employee) so they must declare it again
-        EncryptionHelper.getInstance(this).clearUserRole();
+        // 2. Configure and sign out from Google to allow picking a different Gmail next time
+        String webClientId = EncryptionHelper.getInstance(this).getWebClientId();
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(webClientId)
+                .build();
+        GoogleSignInClient googleSignInClient = GoogleSignIn.getClient(this, gso);
 
-        // Return to SplashActivity and clear the activity history stack
-        Intent intent = new Intent(this, SplashActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
-        finish();
+        googleSignInClient.signOut().addOnCompleteListener(task -> {
+            // 3. Clear the stored Role (Employee) locally
+            EncryptionHelper.getInstance(EmployeeDashboardActivity.this).clearUserRole();
+
+            // 4. Return to SplashActivity and clear the entire activity history stack
+            Intent intent = new Intent(EmployeeDashboardActivity.this, SplashActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            finish();
+        });
     }
-} 
+}
