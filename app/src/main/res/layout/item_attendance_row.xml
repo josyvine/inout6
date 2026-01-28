@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Use a fixed width for the entire row to enable horizontal scrolling in the parent -->
+<!-- Total width matches layout_attendance_table_header (1200dp) -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="1000dp"
+    android:layout_width="1200dp"
     android:layout_height="wrap_content"
     android:background="@android:color/white"
     android:orientation="horizontal"
@@ -9,7 +9,7 @@
     android:paddingHorizontal="4dp"
     android:gravity="center_vertical">
 
-    <!-- 1. Date --> 
+    <!-- 1. Date -->
     <TextView
         android:id="@+id/tv_col_date"
         android:layout_width="100dp"
@@ -39,7 +39,19 @@
         android:textColor="@color/status_green"
         android:textSize="13sp" />
 
-    <!-- 4. Check-Out -->
+    <!-- 4. NEW: Transit Route -->
+    <TextView
+        android:id="@+id/tv_col_transit"
+        android:layout_width="200dp"
+        android:layout_height="wrap_content"
+        android:text="No transit record"
+        android:gravity="center"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:textColor="@android:color/darker_gray"
+        android:textSize="11sp" />
+
+    <!-- 5. Check-Out -->
     <TextView
         android:id="@+id/tv_col_out"
         android:layout_width="80dp"
@@ -49,7 +61,7 @@
         android:textColor="@color/status_red"
         android:textSize="13sp" />
 
-    <!-- 5. Total Hours -->
+    <!-- 6. Total Hours -->
     <TextView
         android:id="@+id/tv_col_hours"
         android:layout_width="90dp"
@@ -60,7 +72,7 @@
         android:textSize="13sp"
         android:textStyle="bold" />
 
-    <!-- 6. Location Name -->
+    <!-- 7. Location Name -->
     <TextView
         android:id="@+id/tv_col_location"
         android:layout_width="180dp"
@@ -71,7 +83,7 @@
         android:textColor="@android:color/black"
         android:textSize="13sp" />
 
-    <!-- 7. Distance (Meters) -->
+    <!-- 8. Distance (Meters) -->
     <TextView
         android:id="@+id/tv_col_distance"
         android:layout_width="80dp"
@@ -81,7 +93,7 @@
         android:textColor="@android:color/black"
         android:textSize="13sp" />
 
-    <!-- 8. Fingerprint Verified (Icon) -->
+    <!-- 9. Fingerprint Verified (Icon) -->
     <FrameLayout
         android:layout_width="100dp"
         android:layout_height="wrap_content"
@@ -94,7 +106,7 @@
             android:src="@drawable/ic_verified_small" />
     </FrameLayout>
 
-    <!-- 9. GPS Verified (Icon) -->
+    <!-- 10. GPS Verified (Icon) -->
     <FrameLayout
         android:layout_width="100dp"
         android:layout_height="wrap_content"
@@ -107,7 +119,7 @@
             android:src="@drawable/ic_verified_small" />
     </FrameLayout>
 
-    <!-- 10. Status (Icon Indicator) -->
+    <!-- 11. Status (Icon Indicator) -->
     <FrameLayout
         android:layout_width="100dp"
         android:layout_height="wrap_content"
