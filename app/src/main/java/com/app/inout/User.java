@@ -1,10 +1,12 @@
 package com.inout.app.models;
 
 import com.google.firebase.firestore.IgnoreExtraProperties;
+import com.google.firebase.firestore.PropertyName;
 
 /**
  * Model class representing a user in the 'users' Firestore collection.
  * This is the bridge between Firestore and the app memory.
+ * FIXED: Added PropertyName annotations to ensure location sync works.
  */
 @IgnoreExtraProperties
 public class User {
@@ -17,12 +19,10 @@ public class User {
     private boolean approved;
     private String employeeId; // Assigned by Admin (e.g., EMP001)
     private String photoUrl;
-    
-    // CRITICAL FIELD: This must match the Firestore key exactly
     private String assignedLocationId; 
 
     public User() {
-        // Default constructor required for Firestore
+        // Default constructor required for calls to DataSnapshot.getValue(User.class)
     }
 
     public User(String uid, String email, String role) {
@@ -32,76 +32,94 @@ public class User {
         this.approved = false;
     }
 
-    // Getters and Setters
+    // Getters and Setters with PropertyName annotations
 
+    @PropertyName("uid")
     public String getUid() {
         return uid;
     }
 
+    @PropertyName("uid")
     public void setUid(String uid) {
         this.uid = uid;
     }
 
+    @PropertyName("name")
     public String getName() {
         return name;
     }
 
+    @PropertyName("name")
     public void setName(String name) {
         this.name = name;
     }
 
+    @PropertyName("email")
     public String getEmail() {
         return email;
     }
 
+    @PropertyName("email")
     public void setEmail(String email) {
         this.email = email;
     }
 
+    @PropertyName("phone")
     public String getPhone() {
         return phone;
     }
 
+    @PropertyName("phone")
     public void setPhone(String phone) {
         this.phone = phone;
     }
 
+    @PropertyName("role")
     public String getRole() {
         return role;
     }
 
+    @PropertyName("role")
     public void setRole(String role) {
         this.role = role;
     }
 
+    @PropertyName("approved")
     public boolean isApproved() {
         return approved;
     }
 
+    @PropertyName("approved")
     public void setApproved(boolean approved) {
         this.approved = approved;
     }
 
+    @PropertyName("employeeId")
     public String getEmployeeId() {
         return employeeId;
     }
 
+    @PropertyName("employeeId")
     public void setEmployeeId(String employeeId) {
         this.employeeId = employeeId;
     }
 
+    @PropertyName("photoUrl")
     public String getPhotoUrl() {
         return photoUrl;
     }
 
+    @PropertyName("photoUrl")
     public void setPhotoUrl(String photoUrl) {
         this.photoUrl = photoUrl;
     }
 
+    @PropertyName("assignedLocationId")
     public String getAssignedLocationId() {
         return assignedLocationId;
     }
 
+    @PropertyName("assignedLocationId")
     public void setAssignedLocationId(String assignedLocationId) {
         this.assignedLocationId = assignedLocationId;
     }
