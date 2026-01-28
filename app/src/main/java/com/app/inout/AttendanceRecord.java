@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * Professional Model class for a daily attendance record.
- * Updated to support Transit History logic.
+ * Fixed to support Check-In, 10-column CSV table, and NEW Transit Logic.
  */
 @IgnoreExtraProperties
 public class AttendanceRecord {
@@ -26,12 +26,12 @@ public class AttendanceRecord {
     private double checkOutLng;
     
     private String totalHours;
-    private String locationName;    // The initial or final office name
-    private float distanceMeters;   // Total accumulated distance
+    private String locationName;    // The office name assigned
+    private float distanceMeters;   // Distance from target at check-in
     
-    // TRANSIT LOGIC FIELDS
-    private List<String> movementLog; // Stores ["Loc A", "Loc B", "Loc C"]
-    private String lastVerifiedLocationId; // Stores the ID of the last place verified (to detect changes)
+    // TRANSIT LOGIC FIELDS (NEW)
+    private List<String> movementLog; // Stores sequence ["Loc A", "Loc B"]
+    private String lastVerifiedLocationId; // ID of the place currently checked in/transited to
 
     // Security flags
     private boolean fingerprintVerified;
@@ -43,6 +43,7 @@ public class AttendanceRecord {
      * Default constructor required for Firestore.
      */
     public AttendanceRecord() {
+        // Initialize list to prevent null pointers
         this.movementLog = new ArrayList<>();
     }
 
@@ -55,27 +56,8 @@ public class AttendanceRecord {
         this.date = date;
         this.timestamp = timestamp;
         this.fingerprintVerified = true; 
-        this.gpsVerified = true;
+        this.gpsVerified = true;    
         this.movementLog = new ArrayList<>();
-    }
-
-    /**
-     * Helper to generate the Transit Summary string for CSV and UI.
-     */
-    public String getTransitSummary() {
-        if (movementLog == null || movementLog.size() <= 1) {
-            return "No transit record today";
-        }
-        
-        // Join the list with arrows (e.g., "Warehouse -> Canara Bank")
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < movementLog.size(); i++) {
-            builder.append(movementLog.get(i));
-            if (i < movementLog.size() - 1) {
-                builder.append(" → ");
-            }
-        }
-        return builder.toString();
     }
 
     /**
@@ -89,6 +71,25 @@ public class AttendanceRecord {
         } else {
             return "Absent";
         }
+    }
+
+    /**
+     * Helper to generate the Transit Summary string for CSV and UI.
+     * Logic: If only 1 location in list -> "No transit". If > 1 -> "A -> B -> C".
+     */
+    public String getTransitSummary() {
+        if (movementLog == null || movementLog.size() <= 1) {
+            return "No transit record today";
+        }
+        
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < movementLog.size(); i++) {
+            builder.append(movementLog.get(i));
+            if (i < movementLog.size() - 1) {
+                builder.append(" → ");
+            }
+        }
+        return builder.toString();
     }
 
     // Getters and Setters
@@ -148,7 +149,12 @@ public class AttendanceRecord {
     public boolean isGpsVerified() { return gpsVerified; }
     public void setGpsVerified(boolean gpsVerified) { this.gpsVerified = gpsVerified; }
 
-    public void setLocationVerified(boolean verified) { this.gpsVerified = verified; }
+    /**
+     * Alias for setGpsVerified to maintain compatibility with existing Fragment logic.
+     */
+    public void setLocationVerified(boolean verified) {
+        this.gpsVerified = verified;
+    }
 
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
