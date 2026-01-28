@@ -6,6 +6,7 @@ import com.google.firebase.firestore.PropertyName;
 /**
  * Model class representing a user in the 'users' Firestore collection.
  * This is the bridge between Firestore and the app memory.
+ * FIXED: Added PropertyName annotations to ensure data syncs correctly in Release APKs.
  */
 @IgnoreExtraProperties
 public class User {
@@ -23,7 +24,7 @@ public class User {
     private String assignedLocationId; 
 
     public User() {
-        // Default constructor required for calls to DataSnapshot.getValue(User.class)
+        // Default constructor required for Firestore
     }
 
     public User(String uid, String email, String role) {
