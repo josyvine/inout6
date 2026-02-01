@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * Utility to generate and share professional attendance reports.
- * UPDATED: Matches the 11-column table layout (Includes Transit Route).
+ * UPDATED: Matches the 13-column table layout (Includes Shift and Overtime).
  */
 public class CsvExportHelper {
 
@@ -32,9 +32,9 @@ public class CsvExportHelper {
      */
     public static void exportAttendanceToCsv(Context context, List<AttendanceRecord> records, String fileName) {
         
-        // 1. Create the CSV Header Row (11 Columns)
+        // 1. Create the CSV Header Row (13 Columns)
         StringBuilder csvData = new StringBuilder();
-        csvData.append("Date,Day,CheckIn,TransitRoute,CheckOut,TotalHours,Location,DistanceMeters,FingerprintVerified,GPSVerified,Status\n");
+        csvData.append("Date,Day,CheckIn,TransitRoute,CheckOut,AssignedShift,TotalHours,Overtime,Location,DistanceMeters,FingerprintVerified,GPSVerified,Status\n");
 
         // 2. Loop through all records and format rows
         for (AttendanceRecord record : records) {
@@ -42,11 +42,19 @@ public class CsvExportHelper {
             String day = record.getDayOfWeek();
             String in = (record.getCheckInTime() != null) ? record.getCheckInTime() : "--";
             
-            // NEW: Get Transit Route string
+            // Transit Route (Wrapped in quotes to handle arrows safely)
             String transit = record.getTransitSummary();
             
             String out = (record.getCheckOutTime() != null) ? record.getCheckOutTime() : "--";
+            
+            // NEW: Shift Info
+            String shift = (record.getAssignedShift() != null) ? record.getAssignedShift() : "--";
+            
             String hours = (record.getTotalHours() != null) ? record.getTotalHours() : "0h 00m";
+            
+            // NEW: Overtime Info
+            String overtime = (record.getOvertimeHours() != null) ? record.getOvertimeHours() : "--";
+            
             String location = (record.getLocationName() != null) ? record.getLocationName() : "N/A";
             String distance = (record.getCheckInTime() != null) ? String.valueOf(Math.round(record.getDistanceMeters())) : "--";
             
@@ -64,7 +72,9 @@ public class CsvExportHelper {
                     .append(in).append(",")
                     .append("\"").append(transit).append("\",")
                     .append(out).append(",")
+                    .append(shift).append(",")  // New Column
                     .append(hours).append(",")
+                    .append(overtime).append(",") // New Column
                     .append("\"").append(location).append("\",")
                     .append(distance).append(",")
                     .append(finger).append(",")
