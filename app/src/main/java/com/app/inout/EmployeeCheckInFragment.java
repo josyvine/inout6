@@ -1,5 +1,7 @@
 package com.inout.app;
 
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.os.Bundle;
 import android.util.Log;
@@ -13,7 +15,6 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.inout.app.databinding.FragmentEmployeeCheckinBinding;
@@ -24,13 +25,17 @@ import com.inout.app.utils.BiometricHelper;
 import com.inout.app.utils.LocationHelper;
 import com.inout.app.utils.TimeUtils;
 
+import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Fragment where employees perform Check-In, Transit, and Check-Out.
- * UPDATED: Includes 3-Button Logic and Movement Logging.
+ * UPDATED: Includes Traveling Mode Bypass and Overtime Calculation.
  */
 public class EmployeeCheckInFragment extends Fragment {
 
@@ -64,7 +69,6 @@ public class EmployeeCheckInFragment extends Fragment {
         mAuth = FirebaseAuth.getInstance();
         locationHelper = new LocationHelper(requireContext());
 
-        // Initial UI State: All disabled until data loads
         updateButtonState(false, false, false);
 
         loadUserDataAndStatus();
@@ -79,15 +83,11 @@ public class EmployeeCheckInFragment extends Fragment {
         binding.btnTransit.setEnabled(transit);
         binding.btnCheckOut.setEnabled(out);
         
-        // Visual opacity for disabled state
         binding.btnCheckIn.setAlpha(in ? 1.0f : 0.5f);
         binding.btnTransit.setAlpha(transit ? 1.0f : 0.5f);
         binding.btnCheckOut.setAlpha(out ? 1.0f : 0.5f);
     }
 
-    /**
-     * Fetches user profile to display real Name/ID and retrieve the office assignment ID.
-     */
     private void loadUserDataAndStatus() {
         if (mAuth.getCurrentUser() == null) return;
         String uid = mAuth.getCurrentUser().getUid();
@@ -121,9 +121,8 @@ public class EmployeeCheckInFragment extends Fragment {
         db.collection("locations").document(locId).get().addOnSuccessListener(doc -> {
             if (doc.exists()) {
                 assignedLocation = doc.toObject(CompanyConfig.class);
-                assignedLocation.setId(doc.getId()); // Ensure ID is set
-                
-                Log.d(TAG, "New Location Assigned: " + assignedLocation.getName());
+                assignedLocation.setId(doc.getId());
+                Log.d(TAG, "Assigned to: " + assignedLocation.getName());
                 updateUIBasedOnStatus();
             } else {
                 binding.tvStatus.setText("Status: Workplace record not found.");
@@ -147,9 +146,6 @@ public class EmployeeCheckInFragment extends Fragment {
         });
     }
 
-    /**
-     * CRITICAL LOGIC: Determines which buttons are enabled based on state.
-     */
     private void updateUIBasedOnStatus() {
         if (currentUser == null || assignedLocation == null) return;
 
@@ -158,18 +154,18 @@ public class EmployeeCheckInFragment extends Fragment {
         if (todayRecord == null) {
             // Case 1: Start of Day
             updateButtonState(true, false, false);
-            binding.tvStatus.setText("Status: Ready to Check-In at " + locName);
+            if (currentUser.isTraveling()) {
+                binding.tvStatus.setText("Status: Traveling Mode Enabled. Ready to Start.");
+            } else {
+                binding.tvStatus.setText("Status: Ready to Check-In at " + locName);
+            }
             
         } else if (todayRecord.getCheckOutTime() == null || todayRecord.getCheckOutTime().isEmpty()) {
             // Case 2: Currently Checked In
-            
-            // TRANSIT LOGIC: Check if the Admin has changed the location since the last verification
             String lastLocId = todayRecord.getLastVerifiedLocationId();
             String currentLocId = assignedLocation.getId();
-            
             boolean allowTransit = false;
             
-            // If the assigned location is different from where they last checked in/transited -> Enable Transit
             if (lastLocId != null && !lastLocId.equals(currentLocId)) {
                 allowTransit = true;
                 binding.tvStatus.setText("Transit Required: Move to " + locName);
@@ -182,8 +178,7 @@ public class EmployeeCheckInFragment extends Fragment {
         } else {
             // Case 3: Shift Completed
             updateButtonState(false, false, false);
-            binding.tvStatus.setText("Status: Shift Completed at " + todayRecord.getLocationName() + 
-                    " (" + todayRecord.getTotalHours() + ")");
+            binding.tvStatus.setText("Status: Shift Completed (" + todayRecord.getTotalHours() + ")");
         }
     }
 
@@ -225,20 +220,22 @@ public class EmployeeCheckInFragment extends Fragment {
                             assignedLocation.getLatitude(), assignedLocation.getLongitude(),
                             assignedLocation.getRadius());
 
-                    if (inRange) {
+                    // UPDATED LOGIC: Traveling Mode Bypass
+                    if (actionType == ACTION_IN && currentUser.isTraveling()) {
+                        // Bypass radius check for FIRST check-in if Traveling is enabled
+                        float dist = 0; // Distance logic technically doesn't apply to "remote" start
+                        performCheckIn(location, dist, true); // True flag for remote start
+                    } 
+                    else if (inRange) {
                         float dist = LocationHelper.calculateDistance(
                                 location.getLatitude(), location.getLongitude(),
                                 assignedLocation.getLatitude(), assignedLocation.getLongitude());
                         
-                        if (actionType == ACTION_IN) {
-                            performCheckIn(location, dist);
-                        } else if (actionType == ACTION_TRANSIT) {
-                            performTransit(location, dist);
-                        } else if (actionType == ACTION_OUT) {
-                            performCheckOut(location);
-                        }
+                        if (actionType == ACTION_IN) performCheckIn(location, dist, false);
+                        else if (actionType == ACTION_TRANSIT) performTransit(location, dist);
+                        else if (actionType == ACTION_OUT) performCheckOut(location);
                     } else {
-                        String msg = "Denied: You are not at " + assignedLocation.getName() + " (Out of 100m range).";
+                        String msg = "Denied: You are not at " + assignedLocation.getName() + ".";
                         Toast.makeText(getContext(), msg, Toast.LENGTH_LONG).show();
                     }
                 }
@@ -252,7 +249,10 @@ public class EmployeeCheckInFragment extends Fragment {
         });
     }
 
-    private void performCheckIn(Location loc, float distance) {
+    /**
+     * @param isRemoteStart If true, user is checking in from home/travel, not the office.
+     */
+    private void performCheckIn(Location loc, float distance, boolean isRemoteStart) {
         String dateId = TimeUtils.getCurrentDateId();
         String recordId = currentUser.getEmployeeId() + "_" + dateId;
 
@@ -269,11 +269,27 @@ public class EmployeeCheckInFragment extends Fragment {
         record.setFingerprintVerified(true);
         record.setLocationVerified(true);
         record.setDistanceMeters(distance);
-        record.setLocationName(assignedLocation.getName());
         
-        // Initialize Movement Log with the first location
+        // Save assigned shift info for the record
+        String shiftInfo = "N/A";
+        if (currentUser.getShiftStartTime() != null && currentUser.getShiftEndTime() != null) {
+            shiftInfo = currentUser.getShiftStartTime() + " - " + currentUser.getShiftEndTime();
+        }
+        record.setAssignedShift(shiftInfo);
+
         List<String> moves = new ArrayList<>();
-        moves.add(assignedLocation.getName());
+        
+        if (isRemoteStart) {
+            // Find address name for remote start
+            String addressName = getAddressName(loc);
+            record.setStartLocationName(addressName); // "Home" or street address
+            record.setLocationName(assignedLocation.getName()); // Still assigned to the final destination
+            moves.add("Started at " + addressName); // Add to log
+        } else {
+            record.setLocationName(assignedLocation.getName());
+            moves.add(assignedLocation.getName());
+        }
+        
         record.setMovementLog(moves);
         record.setLastVerifiedLocationId(assignedLocation.getId());
 
@@ -281,26 +297,20 @@ public class EmployeeCheckInFragment extends Fragment {
                 .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-In Success!", Toast.LENGTH_SHORT).show());
     }
 
-    /**
-     * NEW: TRANSIT LOGIC
-     * Adds the new location to the movement log and updates the current verified location.
-     */
     private void performTransit(Location loc, float distance) {
         if (todayRecord == null) return;
 
-        // Add the new distance to the existing total
         float newTotalDist = todayRecord.getDistanceMeters() + distance;
         String newLocName = assignedLocation.getName();
 
         db.collection("attendance").document(todayRecord.getRecordId())
                 .update(
                     "distanceMeters", newTotalDist,
-                    "locationName", newLocName, // Update current location status
+                    "locationName", newLocName,
                     "lastVerifiedLocationId", assignedLocation.getId(),
-                    "movementLog", FieldValue.arrayUnion(newLocName) // Append to history
+                    "movementLog", FieldValue.arrayUnion(newLocName)
                 )
-                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Transit Verified: " + newLocName, Toast.LENGTH_SHORT).show())
-                .addOnFailureListener(e -> Toast.makeText(getContext(), "Transit Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Transit Verified!", Toast.LENGTH_SHORT).show());
     }
 
     private void performCheckOut(Location loc) {
@@ -308,15 +318,67 @@ public class EmployeeCheckInFragment extends Fragment {
 
         String checkOutTime = TimeUtils.getCurrentTime();
         String totalHrs = TimeUtils.calculateDuration(todayRecord.getCheckInTime(), checkOutTime);
+        
+        // NEW: OVERTIME CALCULATION
+        String overtimeStr = calculateOvertime(todayRecord.getCheckInTime(), checkOutTime);
 
         db.collection("attendance").document(todayRecord.getRecordId())
                 .update(
                         "checkOutTime", checkOutTime,
                         "checkOutLat", loc.getLatitude(),
                         "checkOutLng", loc.getLongitude(),
-                        "totalHours", totalHrs
+                        "totalHours", totalHrs,
+                        "overtimeHours", overtimeStr // Save calculated overtime
                 )
                 .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-Out Success!", Toast.LENGTH_SHORT).show());
+    }
+
+    /**
+     * Calculates overtime based on assigned shift hours vs actual worked hours.
+     */
+    private String calculateOvertime(String inTime, String outTime) {
+        if (currentUser.getShiftStartTime() == null || currentUser.getShiftEndTime() == null) return "0h 00m";
+
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.US);
+            
+            // Calculate Shift Duration (e.g. 9am to 6pm = 9 hours)
+            Date shiftStart = sdf.parse(currentUser.getShiftStartTime());
+            Date shiftEnd = sdf.parse(currentUser.getShiftEndTime());
+            long shiftMillis = shiftEnd.getTime() - shiftStart.getTime();
+
+            // Calculate Worked Duration
+            Date actualIn = sdf.parse(inTime);
+            Date actualOut = sdf.parse(outTime);
+            long workedMillis = actualOut.getTime() - actualIn.getTime();
+
+            if (workedMillis > shiftMillis) {
+                long otMillis = workedMillis - shiftMillis;
+                long hours = TimeUnit.MILLISECONDS.toHours(otMillis);
+                long minutes = TimeUnit.MILLISECONDS.toMinutes(otMillis) % 60;
+                return String.format(Locale.US, "%dh %02dm", hours, minutes);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Overtime calc failed", e);
+        }
+        return "0h 00m";
+    }
+
+    private String getAddressName(Location loc) {
+        try {
+            Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
+            List<Address> addresses = geocoder.getFromLocation(loc.getLatitude(), loc.getLongitude(), 1);
+            if (addresses != null && !addresses.isEmpty()) {
+                // Return simplified address (e.g., "Main St, City")
+                Address addr = addresses.get(0);
+                String street = addr.getThoroughfare() != null ? addr.getThoroughfare() : "";
+                String city = addr.getLocality() != null ? addr.getLocality() : "";
+                return (street + " " + city).trim();
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Geocoder failed", e);
+        }
+        return "Remote Location";
     }
 
     @Override
