@@ -1,6 +1,7 @@
 package com.inout.app;
 
 import android.app.AlertDialog;
+import android.app.TimePickerDialog;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Log;
@@ -8,9 +9,11 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -27,13 +30,16 @@ import com.google.firebase.firestore.WriteBatch;
 import com.inout.app.databinding.FragmentAdminEmployeesBinding;
 import com.inout.app.models.User;
 import com.inout.app.models.CompanyConfig;
+import com.inout.app.adapters.EmployeeListAdapter;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Updated Fragment to handle Multi-Selection, Bulk Deletion, 
- * and Individual/Bulk Location Assignment.
+ * Individual/Bulk Location Assignment, Traveling Mode, and Shift Timing.
  */
 public class AdminEmployeesFragment extends Fragment implements EmployeeListAdapter.OnEmployeeActionListener {
 
@@ -65,20 +71,22 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
 
     private void setupRecyclerView() {
         binding.recyclerViewEmployees.setLayoutManager(new LinearLayoutManager(getContext()));
-        // Initialize adapter with empty list and this fragment as the listener
         adapter = new EmployeeListAdapter(getContext(), employeeList, this);
         binding.recyclerViewEmployees.setAdapter(adapter);
     }
 
     private void fetchLocations() {
         db.collection("locations").addSnapshotListener((value, error) -> {
-            if (error != null) return;
+            if (error != null) {
+                Log.e(TAG, "Failed to fetch locations", error);
+                return;
+            }
             if (value != null) {
                 locationList.clear();
                 for (DocumentSnapshot doc : value) {
                     CompanyConfig loc = doc.toObject(CompanyConfig.class);
                     if (loc != null) {
-                        loc.setId(doc.getId());
+                        loc.setId(doc.getId()); // Store document ID for assignment
                         locationList.add(loc);
                     }
                 }
@@ -94,7 +102,10 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
                     @Override
                     public void onEvent(@Nullable QuerySnapshot value, @Nullable FirebaseFirestoreException error) {
                         binding.progressBar.setVisibility(View.GONE);
-                        if (error != null) return;
+                        if (error != null) {
+                            Log.e(TAG, "Listen failed.", error);
+                            return;
+                        }
 
                         if (value != null) {
                             employeeList.clear();
@@ -113,8 +124,7 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
     }
 
     /**
-     * FIXED: Implements the interface method for individual "Approve" button.
-     * It ensures a location is assigned even for single approvals.
+     * Handles individual "Approve" button on the employee card.
      */
     @Override
     public void onApproveClicked(User user) {
@@ -131,14 +141,16 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
 
         LinearLayout layout = new LinearLayout(requireContext());
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(60, 40, 60, 20);
+        layout.setPadding(60, 20, 60, 10);
 
+        // 1. Employee ID Input
         final EditText inputId = new EditText(requireContext());
         inputId.setHint("Employee ID (e.g. EMP001)");
         inputId.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         if (user.getEmployeeId() != null) inputId.setText(user.getEmployeeId());
         layout.addView(inputId);
 
+        // 2. Location Spinner
         final Spinner spinner = new Spinner(requireContext());
         spinner.setPadding(0, 40, 0, 40);
         List<String> names = new ArrayList<>();
@@ -149,24 +161,60 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
                 currentSelection = i;
             }
         }
-        
         ArrayAdapter<String> spinAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, names);
         spinAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(spinAdapter);
         spinner.setSelection(currentSelection);
         layout.addView(spinner);
 
+        // 3. Traveling Mode Checkbox
+        final CheckBox cbTraveling = new CheckBox(requireContext());
+        cbTraveling.setText("Enable Traveling / Remote Start");
+        cbTraveling.setChecked(user.isTraveling()); // Pre-fill if existing
+        layout.addView(cbTraveling);
+
+        // 4. Shift Time Selection
+        TextView tvLabel = new TextView(requireContext());
+        tvLabel.setText("Assigned Shift Hours:");
+        tvLabel.setPadding(0, 20, 0, 10);
+        layout.addView(tvLabel);
+
+        LinearLayout timeLayout = new LinearLayout(requireContext());
+        timeLayout.setOrientation(LinearLayout.HORIZONTAL);
+        
+        final TextView tvStart = new TextView(requireContext());
+        tvStart.setText(user.getShiftStartTime() != null ? user.getShiftStartTime() : "09:00 AM");
+        tvStart.setTextSize(16);
+        tvStart.setPadding(0, 0, 40, 0);
+        tvStart.setOnClickListener(v -> showTimePicker(tvStart));
+        
+        final TextView tvEnd = new TextView(requireContext());
+        tvEnd.setText(user.getShiftEndTime() != null ? user.getShiftEndTime() : "06:00 PM");
+        tvEnd.setTextSize(16);
+        tvEnd.setOnClickListener(v -> showTimePicker(tvEnd));
+
+        timeLayout.addView(tvStart);
+        timeLayout.addView(new TextView(requireContext()) {{ setText(" - "); }});
+        timeLayout.addView(tvEnd);
+        layout.addView(timeLayout);
+
         builder.setView(layout);
-        builder.setPositiveButton("Approve", (dialog, which) -> {
+
+        builder.setPositiveButton("Approve & Save", (dialog, which) -> {
             String empId = inputId.getText().toString().trim();
             int selectedIndex = spinner.getSelectedItemPosition();
+            
             if (!empId.isEmpty() && selectedIndex >= 0) {
                 String locId = locationList.get(selectedIndex).getId();
+                
                 db.collection("users").document(user.getUid())
                         .update("approved", true, 
                                 "employeeId", empId, 
-                                "assignedLocationId", locId)
-                        .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Approved and Assigned!", Toast.LENGTH_SHORT).show());
+                                "assignedLocationId", locId,
+                                "isTraveling", cbTraveling.isChecked(),
+                                "shiftStartTime", tvStart.getText().toString(),
+                                "shiftEndTime", tvEnd.getText().toString())
+                        .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "User Updated Successfully!", Toast.LENGTH_SHORT).show());
             } else {
                 Toast.makeText(getContext(), "ID and Location required!", Toast.LENGTH_SHORT).show();
             }
@@ -175,9 +223,17 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
         builder.show();
     }
 
-    /**
-     * FIXED: Implements the interface method for individual delete action.
-     */
+    private void showTimePicker(TextView targetView) {
+        Calendar cal = Calendar.getInstance();
+        new TimePickerDialog(requireContext(), (view, hourOfDay, minute) -> {
+            String amPm = (hourOfDay >= 12) ? "PM" : "AM";
+            int hour12 = (hourOfDay > 12) ? hourOfDay - 12 : hourOfDay;
+            if (hour12 == 0) hour12 = 12;
+            String time = String.format(Locale.US, "%02d:%02d %s", hour12, minute, amPm);
+            targetView.setText(time);
+        }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), false).show();
+    }
+
     @Override
     public void onDeleteClicked(User user) {
         new AlertDialog.Builder(requireContext())
@@ -189,12 +245,9 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
                 }).setNegativeButton("Cancel", null).show();
     }
 
-    /**
-     * Triggered when Admin long-presses on a selection of employees.
-     */
     @Override
     public void onBulkActionRequested(List<User> selectedUsers) {
-        String[] options = {"Remove Selected Employees", "Add location from saved list"};
+        String[] options = {"Remove Selected Employees", "Assign Location & Shift"};
         
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         builder.setTitle("Bulk Actions (" + selectedUsers.size() + " selected)");
@@ -237,43 +290,76 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
         }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        builder.setTitle("Assign Location to " + selectedUsers.size() + " Users");
+        builder.setTitle("Assign to " + selectedUsers.size() + " Users");
 
         LinearLayout layout = new LinearLayout(requireContext());
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(60, 40, 60, 20);
+        layout.setPadding(60, 20, 60, 10);
 
         final Spinner spinner = new Spinner(requireContext());
         List<String> names = new ArrayList<>();
         for (CompanyConfig c : locationList) names.add(c.getName());
-        
         ArrayAdapter<String> spinAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, names);
         spinAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(spinAdapter);
         layout.addView(spinner);
 
+        // Traveling Checkbox for Bulk
+        final CheckBox cbTraveling = new CheckBox(requireContext());
+        cbTraveling.setText("Enable Traveling / Remote Start");
+        layout.addView(cbTraveling);
+
+        // Shift Times for Bulk
+        TextView tvLabel = new TextView(requireContext());
+        tvLabel.setText("Assigned Shift Hours:");
+        tvLabel.setPadding(0, 20, 0, 10);
+        layout.addView(tvLabel);
+
+        LinearLayout timeLayout = new LinearLayout(requireContext());
+        timeLayout.setOrientation(LinearLayout.HORIZONTAL);
+        
+        final TextView tvStart = new TextView(requireContext());
+        tvStart.setText("09:00 AM");
+        tvStart.setTextSize(16);
+        tvStart.setPadding(0, 0, 40, 0);
+        tvStart.setOnClickListener(v -> showTimePicker(tvStart));
+        
+        final TextView tvEnd = new TextView(requireContext());
+        tvEnd.setText("06:00 PM");
+        tvEnd.setTextSize(16);
+        tvEnd.setOnClickListener(v -> showTimePicker(tvEnd));
+
+        timeLayout.addView(tvStart);
+        timeLayout.addView(new TextView(requireContext()) {{ setText(" - "); }});
+        timeLayout.addView(tvEnd);
+        layout.addView(timeLayout);
+
         builder.setView(layout);
-        builder.setPositiveButton("Assign and Approve", (dialog, which) -> {
+        builder.setPositiveButton("Assign All", (dialog, which) -> {
             int selectedIndex = spinner.getSelectedItemPosition();
             if (selectedIndex >= 0) {
                 String locId = locationList.get(selectedIndex).getId();
-                performBulkAssignment(selectedUsers, locId);
+                performBulkAssignment(selectedUsers, locId, cbTraveling.isChecked(), 
+                                      tvStart.getText().toString(), tvEnd.getText().toString());
             }
         });
         builder.setNegativeButton("Cancel", null);
         builder.show();
     }
 
-    private void performBulkAssignment(List<User> selectedUsers, String locId) {
+    private void performBulkAssignment(List<User> selectedUsers, String locId, boolean isTraveling, String start, String end) {
         WriteBatch batch = db.batch();
         for (User user : selectedUsers) {
             batch.update(db.collection("users").document(user.getUid()), 
                     "assignedLocationId", locId,
-                    "approved", true);
+                    "approved", true,
+                    "isTraveling", isTraveling,
+                    "shiftStartTime", start,
+                    "shiftEndTime", end);
         }
         
         batch.commit().addOnSuccessListener(aVoid -> {
-            Toast.makeText(getContext(), "Location assigned to selection.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "Bulk assignment successful.", Toast.LENGTH_SHORT).show();
             adapter.clearSelection();
         }).addOnFailureListener(e -> {
             Toast.makeText(getContext(), "Bulk update failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
