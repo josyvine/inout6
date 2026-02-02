@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white">
+
+    <!-- LAYER 1: The Full Screen Map -->
+    <org.osmdroid.views.MapView
+        android:id="@+id/map_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- LAYER 2: The Fixed Center Pointer (Never Hides) -->
+    <!-- This sits exactly in the center of the screen -->
+    <ImageView
+        android:id="@+id/iv_center_pin"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@android:drawable/ic_menu_myplaces"
+        android:tint="#D32F2F"
+        android:contentDescription="Selection Pin"
+        android:translationY="-24dp" /> 
+        <!-- TranslationY moves it up slightly so the 'point' of the pin is at the exact center -->
+
+    <!-- LAYER 3: UI Controls -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="16dp"
+        android:pointerEvents="none"> 
+        <!-- pointerEvents=none allows touches to pass through empty areas to the map -->
+
+        <!-- Top Controls Container (Clickable to intercept touches) -->
+        <LinearLayout
+            android:id="@+id/top_bar_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:pointerEvents="auto"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- Close Button -->
+            <ImageButton
+                android:id="@+id/btn_close_map"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/rounded_bg_white"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:elevation="4dp"
+                android:contentDescription="Close Map" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"/>
+
+            <!-- Search Toggle Button -->
+            <ImageButton
+                android:id="@+id/btn_toggle_search"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/rounded_bg_white"
+                android:src="@android:drawable/ic_menu_search"
+                android:elevation="4dp"
+                android:contentDescription="Search Location" />
+
+        </LinearLayout>
+
+        <!-- Search Input Bar (Hidden by default) -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cv_search_bar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="6dp"
+            android:pointerEvents="auto"
+            app:layout_constraintTop_toBottomOf="@+id/top_bar_container"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="4dp"
+                android:gravity="center_vertical">
+
+                <EditText
+                    android:id="@+id/et_map_search"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Type city or street..."
+                    android:textSize="14sp"
+                    android:background="@null"
+                    android:padding="8dp"
+                    android:inputType="textPostalAddress"
+                    android:imeOptions="actionSearch"/>
+
+                <Button
+                    android:id="@+id/btn_map_search_go"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="Search"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Zoom Controls (Bottom Right) -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="16dp"
+            android:pointerEvents="auto"
+            app:layout_constraintBottom_toTopOf="@+id/btn_confirm_selection"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <ImageButton
+                android:id="@+id/btn_zoom_in"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/rounded_bg_white"
+                android:src="@android:drawable/ic_input_add"
+                android:elevation="4dp"
+                android:layout_marginBottom="8dp"/>
+
+            <ImageButton
+                android:id="@+id/btn_zoom_out"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/rounded_bg_white"
+                android:src="@android:drawable/ic_delete"
+                android:rotation="90" 
+                android:elevation="4dp"
+                android:contentDescription="Minus Icon (reusing delete rotated)"/>
+                <!-- Note: Using standard android icons to avoid missing resources. -->
+
+        </LinearLayout>
+
+        <!-- Save Button (Bottom Center) -->
+        <Button
+            android:id="@+id/btn_confirm_selection"
+            android:layout_width="match_parent"
+            android:layout_height="55dp"
+            android:text="Save This Location"
+            android:backgroundTint="#4CAF50"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:elevation="8dp"
+            android:pointerEvents="auto"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</FrameLayout>
