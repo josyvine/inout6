@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Total width matches layout_attendance_table_header (1450dp) -->
+<!-- Total width increased to 1700dp to include the 14th column (Remarks) -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="1450dp"
+    android:layout_width="1700dp"
     android:layout_height="wrap_content"
     android:background="@android:color/white"
     android:orientation="horizontal"
@@ -152,5 +152,16 @@
             android:layout_gravity="center"
             android:src="@android:drawable/presence_online" />
     </FrameLayout>
+
+    <!-- 14. NEW: Remarks -->
+    <TextView
+        android:id="@+id/tv_col_remarks"
+        android:layout_width="250dp"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:gravity="start|center_vertical"
+        android:paddingStart="8dp"
+        android:textColor="@android:color/holo_red_dark"
+        android:textSize="11sp" />
 
 </LinearLayout>
