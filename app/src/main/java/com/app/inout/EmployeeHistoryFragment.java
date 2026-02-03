@@ -32,7 +32,7 @@ import java.util.Locale;
 
 /**
  * Fragment for Employees to view their own personal attendance history.
- * FIXED: Displays real Company Name, calculates Day of Week, and enables Export.
+ * UPDATED: Displays updated 14-column logic including Emergency Leave remarks.
  */
 public class EmployeeHistoryFragment extends Fragment {
 
@@ -64,7 +64,6 @@ public class EmployeeHistoryFragment extends Fragment {
         setupRecyclerView();
         fetchEmployeeIdAndLoadLogs();
 
-        // FIXED: Connected the Export button to logic
         binding.btnExportHistory.setOnClickListener(v -> {
             if (historyLogs != null && !historyLogs.isEmpty() && currentUserProfile != null) {
                 String fileName = "My_Attendance_" + new SimpleDateFormat("MMM_yyyy", Locale.US).format(new Date());
@@ -94,18 +93,14 @@ public class EmployeeHistoryFragment extends Fragment {
                         if (currentUserProfile != null && currentUserProfile.getEmployeeId() != null) {
                             this.employeeId = currentUserProfile.getEmployeeId();
                             
-                            // FIXED: Set real data in the header
                             binding.tvHistoryName.setText(currentUserProfile.getName());
                             binding.tvHistoryId.setText("ID: " + this.employeeId);
                             
-                            // FIXED: Set real Company Name from EncryptionHelper
                             String company = EncryptionHelper.getInstance(requireContext()).getCompanyName();
                             binding.tvHistoryCompany.setText(company);
 
-                            // Set current Month/Year
                             binding.tvHistoryMonth.setText(new SimpleDateFormat("MMMM yyyy", Locale.US).format(new Date()));
 
-                            // Load Google Photo
                             if (currentUserProfile.getPhotoUrl() != null) {
                                 Glide.with(this).load(currentUserProfile.getPhotoUrl()).circleCrop().into(binding.ivHistoryPhoto);
                             }
@@ -133,7 +128,6 @@ public class EmployeeHistoryFragment extends Fragment {
                     
                     if (error != null) {
                         Log.e(TAG, "Error listening for history logs", error);
-                        Toast.makeText(getContext(), "Error syncing logs.", Toast.LENGTH_SHORT).show();
                         return;
                     }
 
@@ -145,7 +139,6 @@ public class EmployeeHistoryFragment extends Fragment {
                         for (DocumentSnapshot doc : value) {
                             AttendanceRecord record = doc.toObject(AttendanceRecord.class);
                             if (record != null) {
-                                // FIXED: Calculate and set the Day Name from the Date string
                                 try {
                                     Date date = sdf.parse(record.getDate());
                                     if (date != null) {
