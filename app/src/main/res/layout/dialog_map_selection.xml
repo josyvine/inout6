@@ -90,6 +90,8 @@
                     android:layout_weight="1"
                     android:hint="Search street, area or place..."
                     android:textSize="14sp"
+                    android:textColor="@android:color/black"
+                    android:textColorHint="@android:color/darker_gray"
                     android:background="@null"
                     android:padding="10dp"
                     android:inputType="textPostalAddress"
