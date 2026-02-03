@@ -1,264 +1,267 @@
 package com.inout.app;
 
-import android.app.AlertDialog;
+import android.Manifest;
+import android.content.Context;
+import android.content.pm.PackageManager;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.location.LocationManager;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.cardview.widget.CardView;
+import androidx.core.app.ActivityCompat;
+import androidx.fragment.app.DialogFragment;
 
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.EventListener;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.FirebaseFirestoreException;
-import com.google.firebase.firestore.QuerySnapshot;
-import com.google.firebase.firestore.WriteBatch;
-import com.inout.app.databinding.FragmentAdminLocationsBinding;
-import com.inout.app.models.CompanyConfig;
-import com.inout.app.utils.LocationHelper;
+import org.osmdroid.config.Configuration;
+import org.osmdroid.api.IMapController;
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
+import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.MapView;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Updated Fragment for Office Locations.
- * Features: Remote Search, GPS Capture, Map Selection, and Interactive Selection/Deletion.
+ * Full Screen Dialog for selecting a location on a map.
+ * Uses OpenStreetMap (osmdroid).
+ * Features: Stationary center pointer, map panning, and text search.
  */
-public class AdminLocationsFragment extends Fragment implements LocationAdapter.OnLocationActionListener {
+public class MapSelectionDialog extends DialogFragment {
 
-    private static final String TAG = "AdminLocationsFrag";
-    private FragmentAdminLocationsBinding binding;
-    private FirebaseFirestore db;
-    private LocationHelper locationHelper;
-    
-    private LocationAdapter adapter;
-    private List<CompanyConfig> savedLocations;
-    
-    private double capturedLat = 0;
-    private double capturedLng = 0;
+    private MapView mapView;
+    private EditText etSearch;
+    private CardView cvSearchBar;
+    private OnLocationSelectedListener listener;
+
+    /**
+     * Interface to pass the captured coordinates and address back to the Admin fragment.
+     */
+    public interface OnLocationSelectedListener {
+        void onLocationSelected(double lat, double lng, String addressName);
+    }
+
+    public void setOnLocationSelectedListener(OnLocationSelectedListener listener) {
+        this.listener = listener;
+    }
 
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        binding = FragmentAdminLocationsBinding.inflate(inflater, container, false);
-        return binding.getRoot();
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // OSMDroid configuration initialization
+        Context ctx = requireContext().getApplicationContext();
+        Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
+        
+        // Use Full Screen Theme
+        setStyle(DialogFragment.STYLE_NORMAL, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+    }
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        return inflater.inflate(R.layout.dialog_map_selection, container, false);
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        db = FirebaseFirestore.getInstance();
-        locationHelper = new LocationHelper(requireContext());
-        savedLocations = new ArrayList<>();
+        // Bind UI Elements
+        mapView = view.findViewById(R.id.map_view);
+        etSearch = view.findViewById(R.id.et_map_search);
+        cvSearchBar = view.findViewById(R.id.cv_search_bar);
+        
+        ImageButton btnClose = view.findViewById(R.id.btn_close_map);
+        ImageButton btnToggleSearch = view.findViewById(R.id.btn_toggle_search);
+        Button btnSearchGo = view.findViewById(R.id.btn_map_search_go);
+        ImageButton btnZoomIn = view.findViewById(R.id.btn_zoom_in);
+        ImageButton btnZoomOut = view.findViewById(R.id.btn_zoom_out);
+        Button btnSave = view.findViewById(R.id.btn_confirm_selection);
 
-        setupRecyclerView();
-        setupClickListeners();
-        listenForLocations();
-    }
+        setupMap();
+        centerOnCurrentLocation();
 
-    private void setupRecyclerView() {
-        binding.rvLocations.setLayoutManager(new LinearLayoutManager(getContext()));
-        adapter = new LocationAdapter(savedLocations, this);
-        binding.rvLocations.setAdapter(adapter);
-    }
+        // Close the dialog
+        btnClose.setOnClickListener(v -> dismiss());
 
-    private void setupClickListeners() {
-        // Search Button Logic
-        binding.btnSearchLocation.setOnClickListener(v -> {
-            String address = binding.etSearchAddress.getText().toString().trim();
-            if (!TextUtils.isEmpty(address)) {
-                searchLocationByAddress(address);
+        // Toggle search visibility
+        btnToggleSearch.setOnClickListener(v -> {
+            if (cvSearchBar.getVisibility() == View.VISIBLE) {
+                cvSearchBar.setVisibility(View.GONE);
+                hideKeyboard();
             } else {
-                Toast.makeText(getContext(), "Please enter an address to search", Toast.LENGTH_SHORT).show();
+                cvSearchBar.setVisibility(View.VISIBLE);
+                etSearch.requestFocus();
+                showKeyboard();
             }
         });
 
-        // Capture current GPS logic
-        binding.btnCaptureGps.setOnClickListener(v -> captureCurrentLocation());
+        // Trigger search
+        btnSearchGo.setOnClickListener(v -> performSearch());
+        
+        // Trigger search on keyboard action
+        etSearch.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                performSearch();
+                return true;
+            }
+            return false;
+        });
 
-        // NEW: Open Map Selection Logic
-        binding.btnOpenMap.setOnClickListener(v -> openMapSelectionDialog());
+        // Manual zoom controls
+        btnZoomIn.setOnClickListener(v -> mapView.getController().zoomIn());
+        btnZoomOut.setOnClickListener(v -> mapView.getController().zoomOut());
 
-        // Save logic
-        binding.btnSaveLocation.setOnClickListener(v -> saveLocationToFirestore());
+        // Capture logic
+        btnSave.setOnClickListener(v -> confirmSelection());
     }
 
-    /**
-     * NEW: Opens the Full Screen Map Dialog to pick a location manually.
-     */
-    private void openMapSelectionDialog() {
-        MapSelectionDialog dialog = new MapSelectionDialog();
-        dialog.setOnLocationSelectedListener((lat, lng, addressName) -> {
-            // Update local variables
-            this.capturedLat = lat;
-            this.capturedLng = lng;
+    private void setupMap() {
+        mapView.setTileSource(TileSourceFactory.MAPNIK); // Standard OSM tiles
+        mapView.setMultiTouchControls(true); // Pinch to zoom support
+        
+        IMapController mapController = mapView.getController();
+        mapController.setZoom(15.0);
+    }
 
-            // Update UI
-            if (addressName != null && !addressName.isEmpty()) {
-                binding.etLocationName.setText(addressName);
-            } else {
-                binding.etLocationName.setText("Selected Location");
-            }
+    private void centerOnCurrentLocation() {
+        if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) 
+                == PackageManager.PERMISSION_GRANTED) {
             
-            binding.tvCapturedCoords.setText(String.format("Map Selected:\nLat: %.6f | Lng: %.6f", capturedLat, capturedLng));
-            binding.tvCapturedCoords.setVisibility(View.VISIBLE);
-        });
-        dialog.show(getChildFragmentManager(), "MapSelectionDialog");
+            LocationManager lm = (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
+            Location lastLocation = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            
+            if (lastLocation == null) {
+                lastLocation = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            }
+
+            if (lastLocation != null) {
+                GeoPoint startPoint = new GeoPoint(lastLocation.getLatitude(), lastLocation.getLongitude());
+                mapView.getController().setCenter(startPoint);
+            } else {
+                // Fallback coordinates if GPS hasn't locked yet
+                mapView.getController().setCenter(new GeoPoint(0.0, 0.0));
+                Toast.makeText(getContext(), "GPS Signal weak. Please use Search.", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
-    private void searchLocationByAddress(String addressString) {
-        binding.progressBar.setVisibility(View.VISIBLE);
+    private void performSearch() {
+        String query = etSearch.getText().toString().trim();
+        if (TextUtils.isEmpty(query)) return;
+
+        hideKeyboard();
+        
         Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
         try {
-            List<Address> addresses = geocoder.getFromLocationName(addressString, 1);
+            List<Address> addresses = geocoder.getFromLocationName(query, 1);
             if (addresses != null && !addresses.isEmpty()) {
                 Address result = addresses.get(0);
-                capturedLat = result.getLatitude();
-                capturedLng = result.getLongitude();
-
-                String foundName = result.getFeatureName(); 
-                binding.etLocationName.setText(foundName);
+                GeoPoint target = new GeoPoint(result.getLatitude(), result.getLongitude());
                 
-                binding.tvCapturedCoords.setText(String.format("Found: %s\nLat: %.6f | Lng: %.6f", 
-                        result.getAddressLine(0), capturedLat, capturedLng));
-                binding.tvCapturedCoords.setVisibility(View.VISIBLE);
-                
-                Toast.makeText(getContext(), "Location Found", Toast.LENGTH_SHORT).show();
+                mapView.getController().animateTo(target);
+                mapView.getController().setZoom(17.0); 
             } else {
-                Toast.makeText(getContext(), "Address not found.", Toast.LENGTH_LONG).show();
+                Toast.makeText(getContext(), "Address not found.", Toast.LENGTH_SHORT).show();
             }
         } catch (IOException e) {
-            Log.e(TAG, "Geocoder error", e);
-            Toast.makeText(getContext(), "Search error. Check connection.", Toast.LENGTH_SHORT).show();
-        } finally {
-            binding.progressBar.setVisibility(View.GONE);
+            Toast.makeText(getContext(), "Geocoder Error. Check connection.", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void captureCurrentLocation() {
-        binding.progressBar.setVisibility(View.VISIBLE);
-        binding.btnCaptureGps.setEnabled(false);
+    private void confirmSelection() {
+        // Capture map center (exactly under the stationary pointer)
+        GeoPoint centerPoint = (GeoPoint) mapView.getMapCenter();
+        double lat = centerPoint.getLatitude();
+        double lng = centerPoint.getLongitude();
 
-        locationHelper.getCurrentLocation(new LocationHelper.LocationResultCallback() {
-            @Override
-            public void onLocationResult(Location location) {
-                binding.progressBar.setVisibility(View.GONE);
-                binding.btnCaptureGps.setEnabled(true);
+        StringBuilder addressBuilder = new StringBuilder();
+        Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
+        
+        try {
+            List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
+            if (addresses != null && !addresses.isEmpty()) {
+                Address addr = addresses.get(0);
+                
+                // 1. Get Place Name / Brand / Feature
+                String feature = addr.getFeatureName();
+                // Logic: If FeatureName is a Plus Code (contains +), ignore it
+                if (feature != null && !feature.contains("+")) {
+                    addressBuilder.append(feature).append(", ");
+                }
 
-                if (location != null) {
-                    capturedLat = location.getLatitude();
-                    capturedLng = location.getLongitude();
-                    binding.tvCapturedCoords.setText(String.format("Current GPS:\nLat: %.6f | Lng: %.6f", capturedLat, capturedLng));
-                    binding.tvCapturedCoords.setVisibility(View.VISIBLE);
+                // 2. Get Street / Thoroughfare
+                if (addr.getThoroughfare() != null) {
+                    addressBuilder.append(addr.getThoroughfare()).append(", ");
+                }
+
+                // 3. Get Locality / Area / Neighborhood
+                String area = addr.getSubLocality() != null ? addr.getSubLocality() : addr.getLocality();
+                if (area != null) {
+                    addressBuilder.append(area).append(" ");
+                }
+
+                // 4. Get Postal Code (Explicitly requested)
+                if (addr.getPostalCode() != null) {
+                    addressBuilder.append("- ").append(addr.getPostalCode());
                 }
             }
-
-            @Override
-            public void onError(String errorMsg) {
-                binding.progressBar.setVisibility(View.GONE);
-                binding.btnCaptureGps.setEnabled(true);
-                Toast.makeText(getContext(), "GPS Error: " + errorMsg, Toast.LENGTH_LONG).show();
-            }
-        });
-    }
-
-    private void saveLocationToFirestore() {
-        String locName = binding.etLocationName.getText().toString().trim();
-        if (TextUtils.isEmpty(locName)) {
-            binding.etLocationName.setError("Location Name required");
-            return;
-        }
-        if (capturedLat == 0 || capturedLng == 0) {
-            Toast.makeText(getContext(), "Capture coordinates first", Toast.LENGTH_SHORT).show();
-            return;
+        } catch (IOException e) {
+            // If reverse geocoding fails, fallback to generic name
         }
 
-        binding.progressBar.setVisibility(View.VISIBLE);
-        CompanyConfig config = new CompanyConfig(locName, capturedLat, capturedLng);
-
-        db.collection("locations")
-                .add(config)
-                .addOnSuccessListener(doc -> {
-                    binding.progressBar.setVisibility(View.GONE);
-                    Toast.makeText(getContext(), "Location Saved", Toast.LENGTH_SHORT).show();
-                    clearInputs();
-                });
-    }
-
-    private void clearInputs() {
-        binding.etLocationName.setText("");
-        binding.etSearchAddress.setText("");
-        binding.tvCapturedCoords.setText("");
-        binding.tvCapturedCoords.setVisibility(View.GONE);
-        capturedLat = 0; capturedLng = 0;
-    }
-
-    private void listenForLocations() {
-        db.collection("locations")
-                .addSnapshotListener((value, error) -> {
-                    if (error != null) return;
-                    if (value != null) {
-                        savedLocations.clear();
-                        for (DocumentSnapshot doc : value) {
-                            CompanyConfig config = doc.toObject(CompanyConfig.class);
-                            if (config != null) {
-                                config.setId(doc.getId());
-                                savedLocations.add(config);
-                            }
-                        }
-                        adapter.notifyDataSetChanged();
-                    }
-                });
-    }
-
-    /**
-     * NEW: Implementation of the Delete logic via Long Press.
-     */
-    @Override
-    public void onDeleteRequested(List<CompanyConfig> selectedLocations) {
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Delete Locations")
-                .setMessage("Delete " + selectedLocations.size() + " selected office locations?")
-                .setPositiveButton("Delete All", (dialog, which) -> {
-                    performBulkDelete(selectedLocations);
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void performBulkDelete(List<CompanyConfig> selections) {
-        binding.progressBar.setVisibility(View.VISIBLE);
-        WriteBatch batch = db.batch();
-        
-        for (CompanyConfig loc : selections) {
-            batch.delete(db.collection("locations").document(loc.getId()));
+        String finalAddress = addressBuilder.toString().trim();
+        // Clean up trailing commas
+        if (finalAddress.endsWith(",")) {
+            finalAddress = finalAddress.substring(0, finalAddress.length() - 1);
         }
 
-        batch.commit().addOnSuccessListener(aVoid -> {
-            binding.progressBar.setVisibility(View.GONE);
-            Toast.makeText(getContext(), "Locations deleted successfully.", Toast.LENGTH_SHORT).show();
-            adapter.clearSelection();
-        }).addOnFailureListener(e -> {
-            binding.progressBar.setVisibility(View.GONE);
-            Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        });
+        if (TextUtils.isEmpty(finalAddress)) {
+            finalAddress = "Map Point Location";
+        }
+
+        if (listener != null) {
+            listener.onLocationSelected(lat, lng, finalAddress);
+        }
+        dismiss();
+    }
+
+    private void showKeyboard() {
+        InputMethodManager imm = (InputMethodManager) requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+    }
+
+    private void hideKeyboard() {
+        View view = getView();
+        if (view != null) {
+            InputMethodManager imm = (InputMethodManager) requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
     }
 
     @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        binding = null;
+    public void onResume() {
+        super.onResume();
+        mapView.onResume();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        mapView.onPause();
     }
 }
