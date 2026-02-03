@@ -36,7 +36,8 @@ import java.util.Map;
 
 /**
  * Professional Pop-up Window for Attendance Profile.
- * Features: Fixed CV-Header, Horizontal CSV Table, Full Month Report.
+ * Features: Fixed CV-Header, Horizontal 14-column CSV Table, Full Month Report.
+ * UPDATED: Integrated Remarks and Emergency Leave logic for Monthly Export.
  */
 public class AttendanceProfileDialog extends DialogFragment {
 
@@ -84,7 +85,7 @@ public class AttendanceProfileDialog extends DialogFragment {
 
         binding.btnClose.setOnClickListener(v -> dismiss());
 
-        // FIXED: Connected Export button to the CsvExportHelper logic
+        // UPDATED: Export button now uses the 14-column CSV logic
         binding.btnExportCsv.setOnClickListener(v -> {
             if (fullMonthList != null && !fullMonthList.isEmpty()) {
                 String fileName = employee.getName().replace(" ", "_") + "_" + 
@@ -124,7 +125,6 @@ public class AttendanceProfileDialog extends DialogFragment {
     private void loadAttendanceData() {
         binding.progressBar.setVisibility(View.VISIBLE);
 
-        // FIXED: Changed Direction to DESCENDING to match the required Firestore Index
         db.collection("attendance")
                 .whereEqualTo("employeeId", employee.getEmployeeId())
                 .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -142,7 +142,6 @@ public class AttendanceProfileDialog extends DialogFragment {
                 .addOnFailureListener(e -> {
                     binding.progressBar.setVisibility(View.GONE);
                     Log.e(TAG, "Data fetch failed", e);
-                    // This error is now handled by matching the Index direction
                     Toast.makeText(getContext(), "Error loading month records", Toast.LENGTH_SHORT).show();
                 });
     }
@@ -162,7 +161,6 @@ public class AttendanceProfileDialog extends DialogFragment {
 
             if (logs.containsKey(dateId)) {
                 AttendanceRecord record = logs.get(dateId);
-                // FIXED: Explicitly set the day name at runtime to ensure the column is not empty
                 record.setDayOfWeek(dayName);
                 fullMonthList.add(record);
             } else {
