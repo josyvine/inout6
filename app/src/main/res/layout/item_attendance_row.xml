@@ -79,7 +79,7 @@
         android:text="8h 30m"
         android:gravity="center"
         android:textColor="@android:color/black"
-        android:textSize="13sp"
+        android:textSize="13sp" |
         android:textStyle="bold" />
 
     <!-- 8. NEW: Overtime -->
