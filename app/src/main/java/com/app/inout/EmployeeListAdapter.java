@@ -20,6 +20,7 @@ import java.util.Set;
 
 /**
  * Adapter to handle Multi-Selection, Bulk Actions, and Individual Approvals.
+ * UPDATED: Displays Emergency Leave status for Admin visibility.
  */
 public class EmployeeListAdapter extends RecyclerView.Adapter<EmployeeListAdapter.EmployeeViewHolder> {
 
@@ -57,15 +58,24 @@ public class EmployeeListAdapter extends RecyclerView.Adapter<EmployeeListAdapte
         holder.tvPhone.setText(user.getPhone() != null ? user.getPhone() : "No Phone");
         
         // Handle Status Display
-        if (user.isApproved()) {
+        // NEW LOGIC: Check for Emergency Leave Request first
+        if ("pending".equals(user.getEmergencyLeaveStatus())) {
+            holder.tvStatus.setText("Status: Emergency Leave Pending");
+            holder.tvStatus.setTextColor(context.getResources().getColor(android.R.color.holo_red_dark));
+            holder.btnApprove.setVisibility(View.VISIBLE);
+            holder.btnApprove.setText("Review Leave");
+        } 
+        else if (user.isApproved()) {
             String idSuffix = (user.getEmployeeId() != null) ? " (" + user.getEmployeeId() + ")" : "";
             holder.tvStatus.setText("Status: Approved" + idSuffix);
             holder.tvStatus.setTextColor(context.getResources().getColor(android.R.color.holo_green_dark));
             holder.btnApprove.setVisibility(View.GONE);
-        } else {
+        } 
+        else {
             holder.tvStatus.setText("Status: Pending Approval");
             holder.tvStatus.setTextColor(context.getResources().getColor(android.R.color.holo_orange_dark));
             holder.btnApprove.setVisibility(View.VISIBLE);
+            holder.btnApprove.setText("Approve");
         }
         
         // Multi-selection visual feedback
@@ -95,12 +105,10 @@ public class EmployeeListAdapter extends RecyclerView.Adapter<EmployeeListAdapte
         // LONG PRESS: Handle individual delete if nothing selected, or bulk action if selected
         holder.itemView.setOnLongClickListener(v -> {
             if (selectedUserIds.isEmpty()) {
-                // If nothing is selected, long press acts as an individual delete trigger
                 if (listener != null) {
                     listener.onDeleteClicked(user);
                 }
             } else {
-                // If items are selected, long press triggers bulk menu for the selection
                 if (!selectedUserIds.contains(user.getUid())) {
                     toggleSelection(user.getUid());
                 }
