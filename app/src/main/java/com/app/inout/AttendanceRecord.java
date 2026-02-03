@@ -1,12 +1,14 @@
 package com.inout.app.models;
 
 import com.google.firebase.firestore.IgnoreExtraProperties;
+import com.google.firebase.firestore.PropertyName;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Professional Model class for a daily attendance record.
- * Supports Check-In, 10-column CSV, Transit Logic, and Shift/Overtime tracking.
+ * Supports Check-In, 13-column CSV, Transit Logic, and Shift/Overtime tracking.
+ * UPDATED: Added Emergency Leave tracking and Remarks for CSV reporting.
  */
 @IgnoreExtraProperties
 public class AttendanceRecord {
@@ -33,10 +35,15 @@ public class AttendanceRecord {
     private List<String> movementLog; // Stores sequence ["Loc A", "Loc B"]
     private String lastVerifiedLocationId; // ID of the place currently checked in/transited to
 
-    // NEW FIELDS FOR SHIFT & TRAVELING
+    // FIELDS FOR SHIFT & TRAVELING
     private String assignedShift;   // e.g. "09:00 AM - 06:00 PM"
     private String overtimeHours;   // e.g. "3h 00m"
     private String startLocationName; // Where the travel started (e.g. "Home")
+
+    // NEW FIELDS FOR EMERGENCY LEAVE
+    private String emergencyLeaveTime;
+    private String emergencyLeaveLocation;
+    private String remarks;
 
     // Security flags
     private boolean fingerprintVerified;
@@ -66,8 +73,12 @@ public class AttendanceRecord {
 
     /**
      * Helper to determine status for the UI logic.
+     * UPDATED: If Emergency Leave was taken and no checkout occurred, consider Absent.
      */
     public String getStatus() {
+        if (emergencyLeaveTime != null && checkOutTime == null) {
+            return "Absent";
+        }
         if (checkInTime != null && checkOutTime != null && fingerprintVerified && gpsVerified) {
             return "Present";
         } else if (checkInTime != null) {
@@ -82,7 +93,6 @@ public class AttendanceRecord {
      */
     public String getTransitSummary() {
         if (movementLog == null || movementLog.size() <= 1) {
-            // If traveling mode was used, show the start location
             if (startLocationName != null && !startLocationName.isEmpty()) {
                 return "Started at " + startLocationName + " → " + locationName;
             }
@@ -90,7 +100,6 @@ public class AttendanceRecord {
         }
         
         StringBuilder builder = new StringBuilder();
-        // If there was a remote start, prepend it
         if (startLocationName != null && !startLocationName.isEmpty()) {
             builder.append(startLocationName).append(" → ");
         }
@@ -104,74 +113,108 @@ public class AttendanceRecord {
         return builder.toString();
     }
 
-    // Getters and Setters
+    // Getters and Setters with PropertyName mapping
 
+    @PropertyName("recordId")
     public String getRecordId() { return recordId; }
     public void setRecordId(String recordId) { this.recordId = recordId; }
 
+    @PropertyName("employeeId")
     public String getEmployeeId() { return employeeId; }
     public void setEmployeeId(String employeeId) { this.employeeId = employeeId; }
 
+    @PropertyName("employeeName")
     public String getEmployeeName() { return employeeName; }
     public void setEmployeeName(String employeeName) { this.employeeName = employeeName; }
 
+    @PropertyName("date")
     public String getDate() { return date; }
     public void setDate(String date) { this.date = date; }
 
+    @PropertyName("dayOfWeek")
     public String getDayOfWeek() { return dayOfWeek; }
     public void setDayOfWeek(String dayOfWeek) { this.dayOfWeek = dayOfWeek; }
 
+    @PropertyName("checkInTime")
     public String getCheckInTime() { return checkInTime; }
     public void setCheckInTime(String checkInTime) { this.checkInTime = checkInTime; }
 
+    @PropertyName("checkInLat")
     public double getCheckInLat() { return checkInLat; }
     public void setCheckInLat(double checkInLat) { this.checkInLat = checkInLat; }
 
+    @PropertyName("checkInLng")
     public double getCheckInLng() { return checkInLng; }
     public void setCheckInLng(double checkInLng) { this.checkInLng = checkInLng; }
 
+    @PropertyName("checkOutTime")
     public String getCheckOutTime() { return checkOutTime; }
     public void setCheckOutTime(String checkOutTime) { this.checkOutTime = checkOutTime; }
 
+    @PropertyName("checkOutLat")
     public double getCheckOutLat() { return checkOutLat; }
     public void setCheckOutLat(double checkOutLat) { this.checkOutLat = checkOutLat; }
 
+    @PropertyName("checkOutLng")
     public double getCheckOutLng() { return checkOutLng; }
     public void setCheckOutLng(double checkOutLng) { this.checkOutLng = checkOutLng; }
 
+    @PropertyName("totalHours")
     public String getTotalHours() { return totalHours; }
     public void setTotalHours(String totalHours) { this.totalHours = totalHours; }
 
+    @PropertyName("locationName")
     public String getLocationName() { return locationName; }
     public void setLocationName(String locationName) { this.locationName = locationName; }
 
+    @PropertyName("distanceMeters")
     public float getDistanceMeters() { return distanceMeters; }
     public void setDistanceMeters(float distanceMeters) { this.distanceMeters = distanceMeters; }
 
+    @PropertyName("movementLog")
     public List<String> getMovementLog() { return movementLog; }
     public void setMovementLog(List<String> movementLog) { this.movementLog = movementLog; }
 
+    @PropertyName("lastVerifiedLocationId")
     public String getLastVerifiedLocationId() { return lastVerifiedLocationId; }
     public void setLastVerifiedLocationId(String lastVerifiedLocationId) { this.lastVerifiedLocationId = lastVerifiedLocationId; }
 
-    // NEW GETTERS/SETTERS
+    @PropertyName("assignedShift")
     public String getAssignedShift() { return assignedShift; }
     public void setAssignedShift(String assignedShift) { this.assignedShift = assignedShift; }
 
+    @PropertyName("overtimeHours")
     public String getOvertimeHours() { return overtimeHours; }
     public void setOvertimeHours(String overtimeHours) { this.overtimeHours = overtimeHours; }
 
+    @PropertyName("startLocationName")
     public String getStartLocationName() { return startLocationName; }
     public void setStartLocationName(String startLocationName) { this.startLocationName = startLocationName; }
 
+    // NEW EMERGENCY LEAVE GETTERS/SETTERS
+    @PropertyName("emergencyLeaveTime")
+    public String getEmergencyLeaveTime() { return emergencyLeaveTime; }
+    public void setEmergencyLeaveTime(String emergencyLeaveTime) { this.emergencyLeaveTime = emergencyLeaveTime; }
+
+    @PropertyName("emergencyLeaveLocation")
+    public String getEmergencyLeaveLocation() { return emergencyLeaveLocation; }
+    public void setEmergencyLeaveLocation(String emergencyLeaveLocation) { this.emergencyLeaveLocation = emergencyLeaveLocation; }
+
+    @PropertyName("remarks")
+    public String getRemarks() { return remarks; }
+    public void setRemarks(String remarks) { this.remarks = remarks; }
+
+    @PropertyName("fingerprintVerified")
     public boolean isFingerprintVerified() { return fingerprintVerified; }
     public void setFingerprintVerified(boolean fingerprintVerified) { this.fingerprintVerified = fingerprintVerified; }
 
+    @PropertyName("gpsVerified")
     public boolean isGpsVerified() { return gpsVerified; }
     public void setGpsVerified(boolean gpsVerified) { this.gpsVerified = gpsVerified; }
 
-    public void setLocationVerified(boolean verified) { this.gpsVerified = verified; }
-
+    @PropertyName("timestamp")
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+
+    public void setLocationVerified(boolean verified) { this.gpsVerified = verified; }
 }
