@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Fragment where employees perform Check-In, Transit, and Check-Out.
- * UPDATED: Includes Traveling Mode Bypass and Overtime Calculation.
+ * UPDATED: Includes logic to maintain button states and status message during Emergency Leave.
  */
 public class EmployeeCheckInFragment extends Fragment {
 
@@ -170,7 +170,12 @@ public class EmployeeCheckInFragment extends Fragment {
                 allowTransit = true;
                 binding.tvStatus.setText("Transit Required: Move to " + locName);
             } else {
-                binding.tvStatus.setText("Status: Working at " + locName);
+                // NEW LOGIC: Show specifically if Emergency Leave was clicked
+                if (todayRecord.getEmergencyLeaveTime() != null) {
+                    binding.tvStatus.setText("Status: On Emergency Leave. (Resumed duty? You can still transit or check-out)");
+                } else {
+                    binding.tvStatus.setText("Status: Working at " + locName);
+                }
             }
             
             updateButtonState(false, allowTransit, true);
@@ -220,11 +225,9 @@ public class EmployeeCheckInFragment extends Fragment {
                             assignedLocation.getLatitude(), assignedLocation.getLongitude(),
                             assignedLocation.getRadius());
 
-                    // UPDATED LOGIC: Traveling Mode Bypass
+                    // Traveling Mode Bypass
                     if (actionType == ACTION_IN && currentUser.isTraveling()) {
-                        // Bypass radius check for FIRST check-in if Traveling is enabled
-                        float dist = 0; // Distance logic technically doesn't apply to "remote" start
-                        performCheckIn(location, dist, true); // True flag for remote start
+                        performCheckIn(location, 0, true); 
                     } 
                     else if (inRange) {
                         float dist = LocationHelper.calculateDistance(
@@ -249,9 +252,6 @@ public class EmployeeCheckInFragment extends Fragment {
         });
     }
 
-    /**
-     * @param isRemoteStart If true, user is checking in from home/travel, not the office.
-     */
     private void performCheckIn(Location loc, float distance, boolean isRemoteStart) {
         String dateId = TimeUtils.getCurrentDateId();
         String recordId = currentUser.getEmployeeId() + "_" + dateId;
@@ -270,7 +270,6 @@ public class EmployeeCheckInFragment extends Fragment {
         record.setLocationVerified(true);
         record.setDistanceMeters(distance);
         
-        // Save assigned shift info for the record
         String shiftInfo = "N/A";
         if (currentUser.getShiftStartTime() != null && currentUser.getShiftEndTime() != null) {
             shiftInfo = currentUser.getShiftStartTime() + " - " + currentUser.getShiftEndTime();
@@ -280,11 +279,10 @@ public class EmployeeCheckInFragment extends Fragment {
         List<String> moves = new ArrayList<>();
         
         if (isRemoteStart) {
-            // Find address name for remote start
             String addressName = getAddressName(loc);
-            record.setStartLocationName(addressName); // "Home" or street address
-            record.setLocationName(assignedLocation.getName()); // Still assigned to the final destination
-            moves.add("Started at " + addressName); // Add to log
+            record.setStartLocationName(addressName); 
+            record.setLocationName(assignedLocation.getName()); 
+            moves.add("Started at " + addressName); 
         } else {
             record.setLocationName(assignedLocation.getName());
             moves.add(assignedLocation.getName());
@@ -319,7 +317,6 @@ public class EmployeeCheckInFragment extends Fragment {
         String checkOutTime = TimeUtils.getCurrentTime();
         String totalHrs = TimeUtils.calculateDuration(todayRecord.getCheckInTime(), checkOutTime);
         
-        // NEW: OVERTIME CALCULATION
         String overtimeStr = calculateOvertime(todayRecord.getCheckInTime(), checkOutTime);
 
         db.collection("attendance").document(todayRecord.getRecordId())
@@ -328,26 +325,21 @@ public class EmployeeCheckInFragment extends Fragment {
                         "checkOutLat", loc.getLatitude(),
                         "checkOutLng", loc.getLongitude(),
                         "totalHours", totalHrs,
-                        "overtimeHours", overtimeStr // Save calculated overtime
+                        "overtimeHours", overtimeStr 
                 )
                 .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-Out Success!", Toast.LENGTH_SHORT).show());
     }
 
-    /**
-     * Calculates overtime based on assigned shift hours vs actual worked hours.
-     */
     private String calculateOvertime(String inTime, String outTime) {
         if (currentUser.getShiftStartTime() == null || currentUser.getShiftEndTime() == null) return "0h 00m";
 
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.US);
             
-            // Calculate Shift Duration (e.g. 9am to 6pm = 9 hours)
             Date shiftStart = sdf.parse(currentUser.getShiftStartTime());
             Date shiftEnd = sdf.parse(currentUser.getShiftEndTime());
             long shiftMillis = shiftEnd.getTime() - shiftStart.getTime();
 
-            // Calculate Worked Duration
             Date actualIn = sdf.parse(inTime);
             Date actualOut = sdf.parse(outTime);
             long workedMillis = actualOut.getTime() - actualIn.getTime();
@@ -369,7 +361,6 @@ public class EmployeeCheckInFragment extends Fragment {
             Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
             List<Address> addresses = geocoder.getFromLocation(loc.getLatitude(), loc.getLongitude(), 1);
             if (addresses != null && !addresses.isEmpty()) {
-                // Return simplified address (e.g., "Main St, City")
                 Address addr = addresses.get(0);
                 String street = addr.getThoroughfare() != null ? addr.getThoroughfare() : "";
                 String city = addr.getLocality() != null ? addr.getLocality() : "";
