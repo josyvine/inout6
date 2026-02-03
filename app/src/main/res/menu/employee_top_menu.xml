@@ -8,6 +8,13 @@
         android:title="Edit Profile"
         app:showAsAction="never" />
 
+    <!-- NEW: Emergency Leave Action -->
+    <!-- This is enabled only after check-in and before check-out -->
+    <item
+        android:id="@+id/action_emergency_leave"
+        android:title="Emergency Leave"
+        app:showAsAction="never" />
+
     <!-- Standard Logout action -->
     <item
         android:id="@+id/action_logout"
