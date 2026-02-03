@@ -7,6 +7,7 @@ import com.google.firebase.firestore.PropertyName;
  * Model class representing a user in the 'users' Firestore collection.
  * This is the bridge between Firestore and the app memory.
  * FIXED: Added PropertyName annotations to ensure data syncs correctly in Release APKs.
+ * UPDATED: Added Emergency Leave status tracking.
  */
 @IgnoreExtraProperties
 public class User {
@@ -19,7 +20,7 @@ public class User {
     private boolean approved;
     private String employeeId; // Assigned by Admin (e.g., EMP001)
     private String photoUrl;
-    
+
     // For Employees: The ID of the location they are assigned to for check-in
     private String assignedLocationId; 
 
@@ -28,8 +29,12 @@ public class User {
     private String shiftStartTime; 
     private String shiftEndTime;   
 
+    // NEW FIELD FOR EMERGENCY LEAVE
+    private String emergencyLeaveStatus; // "none", "pending", "approved"
+
     public User() {
         // Default constructor required for calls to DataSnapshot.getValue(User.class)
+        this.emergencyLeaveStatus = "none";
     }
 
     public User(String uid, String email, String role) {
@@ -37,6 +42,7 @@ public class User {
         this.email = email;
         this.role = role;
         this.approved = false;
+        this.emergencyLeaveStatus = "none";
     }
 
     // Getters and Setters with explicit PropertyName mapping
@@ -132,7 +138,7 @@ public class User {
     }
 
     // NEW METHODS START HERE
-    
+
     @PropertyName("isTraveling")
     public boolean isTraveling() {
         return isTraveling;
@@ -161,5 +167,15 @@ public class User {
     @PropertyName("shiftEndTime")
     public void setShiftEndTime(String shiftEndTime) {
         this.shiftEndTime = shiftEndTime;
+    }
+
+    @PropertyName("emergencyLeaveStatus")
+    public String getEmergencyLeaveStatus() {
+        return emergencyLeaveStatus;
+    }
+
+    @PropertyName("emergencyLeaveStatus")
+    public void setEmergencyLeaveStatus(String emergencyLeaveStatus) {
+        this.emergencyLeaveStatus = emergencyLeaveStatus;
     }
 }
