@@ -11,12 +11,14 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.inout.app.R;
 import com.inout.app.models.AttendanceRecord;
+import com.inout.app.utils.TimeUtils;
 
 import java.util.List;
 
 /**
- * Professional Adapter for the 13-column CSV attendance table.
- * UPDATED: Handles Transit Route, Assigned Shift, and Overtime columns.
+ * Professional Adapter for the 14-column CSV attendance table.
+ * UPDATED: Handles Transit Route, Assigned Shift, Overtime, and Remarks columns.
+ * Logic included for Emergency Leave hour calculations in the UI.
  */
 public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.AttendanceViewHolder> {
 
@@ -54,13 +56,18 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
         // 4. Check-Out
         holder.tvOut.setText(record.getCheckOutTime() != null ? record.getCheckOutTime() : "--:--");
 
-        // 5. NEW: Assigned Shift
+        // 5. Assigned Shift
         holder.tvShift.setText(record.getAssignedShift() != null ? record.getAssignedShift() : "--");
 
-        // 6. Total Hours
-        holder.tvTotalHours.setText(record.getTotalHours() != null ? record.getTotalHours() : "0h 00m");
+        // 6. Total Hours (With Emergency Leave Calculation Logic)
+        String hoursDisplay = record.getTotalHours() != null ? record.getTotalHours() : "0h 00m";
+        // Logic: If they took emergency leave and didn't check out, calculate hours till leave click
+        if (record.getEmergencyLeaveTime() != null && record.getCheckOutTime() == null) {
+            hoursDisplay = TimeUtils.calculateDuration(record.getCheckInTime(), record.getEmergencyLeaveTime());
+        }
+        holder.tvTotalHours.setText(hoursDisplay);
 
-        // 7. NEW: Overtime
+        // 7. Overtime
         holder.tvOvertime.setText(record.getOvertimeHours() != null ? record.getOvertimeHours() : "--");
 
         // 8. Location Name
@@ -96,12 +103,14 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
         } else if (status.equals("Partial")) {
             holder.ivStatus.setImageResource(R.drawable.ic_status_partial);
         } else {
-            // Absent
+            // Absent (includes Emergency Leave without Resume)
             holder.ivStatus.setImageResource(R.drawable.ic_status_absent);
-            // Gray out the date/day for absent rows
             holder.tvDate.setAlpha(0.5f);
             holder.tvDay.setAlpha(0.5f);
         }
+
+        // 13. NEW: Remarks
+        holder.tvRemarks.setText(record.getRemarks() != null ? record.getRemarks() : "");
     }
 
     @Override
@@ -110,10 +119,10 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
     }
 
     /**
-     * ViewHolder maps the 13 columns defined in item_attendance_row.xml
+     * ViewHolder maps the 14 columns defined in item_attendance_row.xml
      */
     static class AttendanceViewHolder extends RecyclerView.ViewHolder {
-        TextView tvDate, tvDay, tvIn, tvTransit, tvOut, tvShift, tvTotalHours, tvOvertime, tvLocation, tvDistance;
+        TextView tvDate, tvDay, tvIn, tvTransit, tvOut, tvShift, tvTotalHours, tvOvertime, tvLocation, tvDistance, tvRemarks;
         ImageView ivFingerprint, ivGps, ivStatus;
 
         public AttendanceViewHolder(@NonNull View itemView) {
@@ -123,14 +132,15 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
             tvIn = itemView.findViewById(R.id.tv_col_in);
             tvTransit = itemView.findViewById(R.id.tv_col_transit);
             tvOut = itemView.findViewById(R.id.tv_col_out);
-            tvShift = itemView.findViewById(R.id.tv_col_shift); // New Field
+            tvShift = itemView.findViewById(R.id.tv_col_shift);
             tvTotalHours = itemView.findViewById(R.id.tv_col_hours);
-            tvOvertime = itemView.findViewById(R.id.tv_col_overtime); // New Field
+            tvOvertime = itemView.findViewById(R.id.tv_col_overtime);
             tvLocation = itemView.findViewById(R.id.tv_col_location);
             tvDistance = itemView.findViewById(R.id.tv_col_distance);
             ivFingerprint = itemView.findViewById(R.id.iv_col_fingerprint);
             ivGps = itemView.findViewById(R.id.iv_col_gps);
             ivStatus = itemView.findViewById(R.id.iv_col_status);
+            tvRemarks = itemView.findViewById(R.id.tv_col_remarks); // New Field
         }
     }
 }
