@@ -189,28 +189,53 @@ public class MapSelectionDialog extends DialogFragment {
         double lat = centerPoint.getLatitude();
         double lng = centerPoint.getLongitude();
 
-        String addressName = "";
+        StringBuilder addressBuilder = new StringBuilder();
         Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
+        
         try {
             List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
             if (addresses != null && !addresses.isEmpty()) {
-                Address address = addresses.get(0);
+                Address addr = addresses.get(0);
                 
-                // Attempt to build a descriptive location name
-                if (address.getFeatureName() != null) {
-                    addressName = address.getFeatureName();
-                } else if (address.getThoroughfare() != null) {
-                    addressName = address.getThoroughfare();
-                } else if (address.getLocality() != null) {
-                    addressName = address.getLocality();
+                // 1. Get Place Name / Brand / Feature
+                String feature = addr.getFeatureName();
+                // Logic: If FeatureName is a Plus Code (contains +), ignore it
+                if (feature != null && !feature.contains("+")) {
+                    addressBuilder.append(feature).append(", ");
+                }
+
+                // 2. Get Street / Thoroughfare
+                if (addr.getThoroughfare() != null) {
+                    addressBuilder.append(addr.getThoroughfare()).append(", ");
+                }
+
+                // 3. Get Locality / Area / Neighborhood
+                String area = addr.getSubLocality() != null ? addr.getSubLocality() : addr.getLocality();
+                if (area != null) {
+                    addressBuilder.append(area).append(" ");
+                }
+
+                // 4. Get Postal Code (Explicitly requested)
+                if (addr.getPostalCode() != null) {
+                    addressBuilder.append("- ").append(addr.getPostalCode());
                 }
             }
         } catch (IOException e) {
-            // Address name remains empty if geocoding fails
+            // If reverse geocoding fails, fallback to generic name
+        }
+
+        String finalAddress = addressBuilder.toString().trim();
+        // Clean up trailing commas
+        if (finalAddress.endsWith(",")) {
+            finalAddress = finalAddress.substring(0, finalAddress.length() - 1);
+        }
+
+        if (TextUtils.isEmpty(finalAddress)) {
+            finalAddress = "Map Point Location";
         }
 
         if (listener != null) {
-            listener.onLocationSelected(lat, lng, addressName);
+            listener.onLocationSelected(lat, lng, finalAddress);
         }
         dismiss();
     }
