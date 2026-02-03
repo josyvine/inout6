@@ -31,8 +31,6 @@ import com.inout.app.databinding.FragmentAdminEmployeesBinding;
 import com.inout.app.models.User;
 import com.inout.app.models.CompanyConfig;
 
-// FIXED: Removed the incorrect import. Adapter is in the same package.
-
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -41,6 +39,7 @@ import java.util.Locale;
 /**
  * Updated Fragment to handle Multi-Selection, Bulk Deletion, 
  * Individual/Bulk Location Assignment, Traveling Mode, and Shift Timing.
+ * UPDATED: Handles Emergency Leave approvals.
  */
 public class AdminEmployeesFragment extends Fragment implements EmployeeListAdapter.OnEmployeeActionListener {
 
@@ -87,7 +86,7 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
                 for (DocumentSnapshot doc : value) {
                     CompanyConfig loc = doc.toObject(CompanyConfig.class);
                     if (loc != null) {
-                        loc.setId(doc.getId()); // Store document ID for assignment
+                        loc.setId(doc.getId()); 
                         locationList.add(loc);
                     }
                 }
@@ -126,14 +125,37 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
 
     /**
      * Handles individual "Approve" button on the employee card.
+     * UPDATED: Detects if approval is for Emergency Leave or initial account setup.
      */
     @Override
     public void onApproveClicked(User user) {
-        if (locationList.isEmpty()) {
-            Toast.makeText(getContext(), "Please add an Office Location first!", Toast.LENGTH_LONG).show();
-            return;
+        if ("pending".equals(user.getEmergencyLeaveStatus())) {
+            showEmergencyLeaveApprovalDialog(user);
+        } else {
+            if (locationList.isEmpty()) {
+                Toast.makeText(getContext(), "Please add an Office Location first!", Toast.LENGTH_LONG).show();
+                return;
+            }
+            showIndividualApproveDialog(user);
         }
-        showIndividualApproveDialog(user);
+    }
+
+    /**
+     * Dialog to handle specific Emergency Leave approval.
+     */
+    private void showEmergencyLeaveApprovalDialog(User user) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Emergency Leave Approval")
+                .setMessage("Approve emergency leave request for " + user.getName() + "?")
+                .setPositiveButton("Approve Leave", (dialog, which) -> {
+                    db.collection("users").document(user.getUid())
+                            .update("emergencyLeaveStatus", "none")
+                            .addOnSuccessListener(aVoid -> {
+                                Toast.makeText(getContext(), "Leave Approved. User status reset.", Toast.LENGTH_SHORT).show();
+                            });
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void showIndividualApproveDialog(User user) {
@@ -144,14 +166,12 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(60, 20, 60, 10);
 
-        // 1. Employee ID Input
         final EditText inputId = new EditText(requireContext());
         inputId.setHint("Employee ID (e.g. EMP001)");
         inputId.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         if (user.getEmployeeId() != null) inputId.setText(user.getEmployeeId());
         layout.addView(inputId);
 
-        // 2. Location Spinner
         final Spinner spinner = new Spinner(requireContext());
         spinner.setPadding(0, 40, 0, 40);
         List<String> names = new ArrayList<>();
@@ -168,13 +188,11 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
         spinner.setSelection(currentSelection);
         layout.addView(spinner);
 
-        // 3. Traveling Mode Checkbox
         final CheckBox cbTraveling = new CheckBox(requireContext());
         cbTraveling.setText("Enable Traveling / Remote Start");
-        cbTraveling.setChecked(user.isTraveling()); // Pre-fill if existing
+        cbTraveling.setChecked(user.isTraveling()); 
         layout.addView(cbTraveling);
 
-        // 4. Shift Time Selection
         TextView tvLabel = new TextView(requireContext());
         tvLabel.setText("Assigned Shift Hours:");
         tvLabel.setPadding(0, 20, 0, 10);
@@ -305,12 +323,10 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
         spinner.setAdapter(spinAdapter);
         layout.addView(spinner);
 
-        // Traveling Checkbox for Bulk
         final CheckBox cbTraveling = new CheckBox(requireContext());
         cbTraveling.setText("Enable Traveling / Remote Start");
         layout.addView(cbTraveling);
 
-        // Shift Times for Bulk
         TextView tvLabel = new TextView(requireContext());
         tvLabel.setText("Assigned Shift Hours:");
         tvLabel.setPadding(0, 20, 0, 10);
