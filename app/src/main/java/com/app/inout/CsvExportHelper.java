@@ -9,6 +9,7 @@ import android.widget.Toast;
 import androidx.core.content.FileProvider;
 
 import com.inout.app.models.AttendanceRecord;
+import com.inout.app.utils.TimeUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -17,7 +18,8 @@ import java.util.List;
 
 /**
  * Utility to generate and share professional attendance reports.
- * UPDATED: Matches the 13-column table layout (Includes Shift and Overtime).
+ * UPDATED: Matches the 14-column layout including Shift, Overtime, and Remarks.
+ * Handles specific Emergency Leave logic for total hour calculation.
  */
 public class CsvExportHelper {
 
@@ -28,61 +30,59 @@ public class CsvExportHelper {
      * 
      * @param context   Activity or Fragment context.
      * @param records   The list of 30/31 records (including Absents).
-     * @param fileName  Suggested name for the file (e.g., "Josy_Vine_Jan_2026.csv").
+     * @param fileName  Suggested name for the file.
      */
     public static void exportAttendanceToCsv(Context context, List<AttendanceRecord> records, String fileName) {
         
-        // 1. Create the CSV Header Row (13 Columns)
+        // 1. Create the CSV Header Row (14 Columns)
         StringBuilder csvData = new StringBuilder();
-        csvData.append("Date,Day,CheckIn,TransitRoute,CheckOut,AssignedShift,TotalHours,Overtime,Location,DistanceMeters,FingerprintVerified,GPSVerified,Status\n");
+        csvData.append("Date,Day,CheckIn,TransitRoute,CheckOut,AssignedShift,TotalHours,Overtime,Location,DistanceMeters,FingerprintVerified,GPSVerified,Status,Remarks\n");
 
         // 2. Loop through all records and format rows
         for (AttendanceRecord record : records) {
             String date = record.getDate();
             String day = record.getDayOfWeek();
             String in = (record.getCheckInTime() != null) ? record.getCheckInTime() : "--";
-            
-            // Transit Route (Wrapped in quotes to handle arrows safely)
             String transit = record.getTransitSummary();
-            
             String out = (record.getCheckOutTime() != null) ? record.getCheckOutTime() : "--";
-            
-            // NEW: Shift Info
             String shift = (record.getAssignedShift() != null) ? record.getAssignedShift() : "--";
-            
-            String hours = (record.getTotalHours() != null) ? record.getTotalHours() : "0h 00m";
-            
-            // NEW: Overtime Info
             String overtime = (record.getOvertimeHours() != null) ? record.getOvertimeHours() : "--";
-            
             String location = (record.getLocationName() != null) ? record.getLocationName() : "N/A";
             String distance = (record.getCheckInTime() != null) ? String.valueOf(Math.round(record.getDistanceMeters())) : "--";
             
-            // Convert Booleans to professional text proof
             String finger = record.isFingerprintVerified() ? "YES" : "NO";
             String gps = record.isGpsVerified() ? "YES" : "NO";
             
-            // Handle Proof logic for status
+            // EMERGENCY LEAVE & STATUS LOGIC
             String status = record.getStatus();
+            String hours = record.getTotalHours() != null ? record.getTotalHours() : "0h 00m";
+            String remarks = record.getRemarks() != null ? record.getRemarks() : "";
 
-            // Append row to string 
-            // Note: Transit and Location are wrapped in quotes to handle special characters safely
+            // LOGIC: If employee took leave and DID NOT resume (Check-Out is null)
+            if (record.getEmergencyLeaveTime() != null && record.getCheckOutTime() == null) {
+                status = "Absent"; // Consider absent as per requirement
+                // Calculate hours from check-in until the emergency leave click
+                hours = TimeUtils.calculateDuration(record.getCheckInTime(), record.getEmergencyLeaveTime());
+            }
+
+            // Append row to string (Wrap Transit, Location, and Remarks in quotes)
             csvData.append(date).append(",")
                     .append(day).append(",")
                     .append(in).append(",")
                     .append("\"").append(transit).append("\",")
                     .append(out).append(",")
-                    .append(shift).append(",")  // New Column
+                    .append(shift).append(",")
                     .append(hours).append(",")
-                    .append(overtime).append(",") // New Column
+                    .append(overtime).append(",")
                     .append("\"").append(location).append("\",")
                     .append(distance).append(",")
                     .append(finger).append(",")
                     .append(gps).append(",")
-                    .append(status).append("\n");
+                    .append(status).append(",")
+                    .append("\"").append(remarks).append("\"\n");
         }
 
-        // 3. Save to a temporary file for sharing (Zero Billing/No Permanent Storage)
+        // 3. Save to a temporary file for sharing
         try {
             File folder = new File(context.getCacheDir(), "reports");
             if (!folder.exists()) folder.mkdirs();
@@ -102,7 +102,6 @@ public class CsvExportHelper {
     }
 
     private static void shareCsvFile(Context context, File file) {
-        // Use the FileProvider defined in your AndroidManifest
         Uri path = FileProvider.getUriForFile(context, "com.inout.app.fileprovider", file);
         
         Intent intent = new Intent(Intent.ACTION_SEND);
