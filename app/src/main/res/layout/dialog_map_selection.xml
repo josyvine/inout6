@@ -11,8 +11,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- LAYER 2: The Fixed Center Pointer (Never Hides) -->
-    <!-- This sits exactly in the center of the screen -->
+    <!-- LAYER 2: The Fixed Center Pointer -->
+    <!-- This sits exactly in the center and is used to pick the coordinates -->
     <ImageView
         android:id="@+id/iv_center_pin"
         android:layout_width="48dp"
@@ -23,13 +23,13 @@
         android:translationY="-24dp"
         app:tint="#D32F2F" />
 
-    <!-- LAYER 3: UI Controls -->
+    <!-- LAYER 3: UI Controls Overlay -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:padding="16dp">
 
-        <!-- Top Controls Container -->
+        <!-- Top Navigation Bar -->
         <LinearLayout
             android:id="@+id/top_bar_container"
             android:layout_width="match_parent"
@@ -38,39 +38,37 @@
             android:gravity="center_vertical"
             app:layout_constraintTop_toTopOf="parent">
 
-            <!-- Close Button -->
             <ImageButton
                 android:id="@+id/btn_close_map"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="45dp"
+                android:layout_height="45dp"
                 android:background="@drawable/rounded_bg_white"
                 android:src="@android:drawable/ic_menu_close_clear_cancel"
                 android:elevation="4dp"
-                android:contentDescription="Close Map" />
+                android:contentDescription="Close" />
 
             <Space
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"/>
 
-            <!-- Search Toggle Button -->
             <ImageButton
                 android:id="@+id/btn_toggle_search"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="45dp"
+                android:layout_height="45dp"
                 android:background="@drawable/rounded_bg_white"
                 android:src="@android:drawable/ic_menu_search"
                 android:elevation="4dp"
-                android:contentDescription="Search Location" />
+                android:contentDescription="Search" />
 
         </LinearLayout>
 
-        <!-- Search Input Bar (Hidden by default) -->
+        <!-- Collapsible Search Input Bar -->
         <androidx.cardview.widget.CardView
             android:id="@+id/cv_search_bar"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="12dp"
             android:visibility="gone"
             app:cardCornerRadius="8dp"
             app:cardElevation="6dp"
@@ -82,7 +80,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:padding="4dp"
+                android:padding="6dp"
                 android:gravity="center_vertical">
 
                 <EditText
@@ -90,10 +88,10 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:hint="Type city or street..."
+                    android:hint="Search street, area or place..."
                     android:textSize="14sp"
                     android:background="@null"
-                    android:padding="8dp"
+                    android:padding="10dp"
                     android:inputType="textPostalAddress"
                     android:imeOptions="actionSearch"/>
 
@@ -101,34 +99,37 @@
                     android:id="@+id/btn_map_search_go"
                     android:layout_width="wrap_content"
                     android:layout_height="40dp"
-                    android:text="Search"
-                    android:textSize="12sp"/>
+                    android:text="GO"
+                    android:textSize="12sp"
+                    android:backgroundTint="#2196F3"
+                    android:textColor="@android:color/white"/>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Zoom Controls (Bottom Right) -->
+        <!-- Vertical Zoom Controls (Bottom Right) -->
         <LinearLayout
+            android:id="@+id/zoom_controls"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="20dp"
             app:layout_constraintBottom_toTopOf="@+id/btn_confirm_selection"
             app:layout_constraintEnd_toEndOf="parent">
 
             <ImageButton
                 android:id="@+id/btn_zoom_in"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="45dp"
+                android:layout_height="45dp"
                 android:background="@drawable/rounded_bg_white"
                 android:src="@android:drawable/ic_input_add"
                 android:elevation="4dp"
-                android:layout_marginBottom="8dp"
+                android:layout_marginBottom="12dp"
                 android:contentDescription="Zoom In" />
 
             <ImageButton
                 android:id="@+id/btn_zoom_out"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="45dp"
+                android:layout_height="45dp"
                 android:background="@drawable/rounded_bg_white"
                 android:src="@android:drawable/ic_delete"
                 android:rotation="90" 
@@ -137,15 +138,16 @@
 
         </LinearLayout>
 
-        <!-- Save Button (Bottom Center) -->
+        <!-- Confirm and Save Button (Bottom Center) -->
         <Button
             android:id="@+id/btn_confirm_selection"
             android:layout_width="match_parent"
-            android:layout_height="55dp"
-            android:text="Save This Location"
-            android:backgroundTint="#4CAF50"
+            android:layout_height="60dp"
+            android:text="CONFIRM SELECTION"
+            android:backgroundTint="#00897B"
             android:textColor="@android:color/white"
             android:textStyle="bold"
+            android:textSize="16sp"
             android:elevation="8dp"
             app:layout_constraintBottom_toBottomOf="parent" />
 
