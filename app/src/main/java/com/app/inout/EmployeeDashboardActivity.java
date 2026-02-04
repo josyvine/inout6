@@ -61,6 +61,7 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         if (navHostFragment != null) {
             NavController navController = navHostFragment.getNavController();
             
+            // Destinations that are considered "Top Level"
             AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(
                     R.id.nav_employee_checkin, 
                     R.id.nav_employee_history)
@@ -107,14 +108,17 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                     if (snapshot != null && snapshot.exists()) {
                         currentUser = snapshot.toObject(User.class);
                         if (currentUser != null) {
+                            // 1. Check if basic profile data is missing
                             if (currentUser.getPhone() == null || currentUser.getPhone().isEmpty() || 
                                 currentUser.getPhotoUrl() == null || currentUser.getPhotoUrl().isEmpty()) {
                                 
                                 Toast.makeText(this, "Please complete your profile first.", Toast.LENGTH_SHORT).show();
                                 startActivity(new Intent(this, EmployeeProfileActivity.class));
+                                // We don't finish() here so they can come back after saving
                                 return;
                             }
 
+                            // 2. Check for Admin Approval
                             if (!currentUser.isApproved()) {
                                 showWaitingOverlay(true);
                             } else {
@@ -125,6 +129,9 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                 });
     }
 
+    /**
+     * Shows or hides an overlay that blocks interaction until the admin approves the account.
+     */
     private void showWaitingOverlay(boolean show) {
         if (show) {
             binding.layoutWaitingApproval.setVisibility(View.VISIBLE);
@@ -152,7 +159,11 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                                    todayRecord.getCheckOutTime() == null;
             
             emergencyItem.setEnabled(canTakeLeave);
-            emergencyItem.getIcon().setAlpha(canTakeLeave ? 255 : 128);
+            
+            // FIXED: Added null check for getIcon() to prevent NullPointerException
+            if (emergencyItem.getIcon() != null) {
+                emergencyItem.getIcon().setAlpha(canTakeLeave ? 255 : 128);
+            }
         }
         return super.onPrepareOptionsMenu(menu);
     }
@@ -205,8 +216,18 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * UPDATED: Full Logout Logic.
+     * 1. Signs out of Firebase.
+     * 2. Signs out of Google (forces account picker for next login).
+     * 3. Clears the "Employee" role from local storage.
+     * 4. Returns to the absolute landing page (Splash/Role Selection).
+     */
     private void logout() {
+        // 1. Sign out from Firebase
         mAuth.signOut();
+
+        // 2. Configure and sign out from Google to allow picking a different Gmail next time
         String webClientId = EncryptionHelper.getInstance(this).getWebClientId();
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(webClientId)
@@ -214,7 +235,10 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         GoogleSignInClient googleSignInClient = GoogleSignIn.getClient(this, gso);
 
         googleSignInClient.signOut().addOnCompleteListener(task -> {
+            // 3. Clear the stored Role (Employee) locally
             EncryptionHelper.getInstance(EmployeeDashboardActivity.this).clearUserRole();
+
+            // 4. Return to SplashActivity and clear the entire activity history stack
             Intent intent = new Intent(EmployeeDashboardActivity.this, SplashActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
