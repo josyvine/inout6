@@ -22,6 +22,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.inout.app.databinding.ActivityEmployeeDashboardBinding;
 import com.inout.app.models.AttendanceRecord;
 import com.inout.app.models.User;
@@ -42,6 +43,8 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
     private FirebaseFirestore db;
     private User currentUser;
     private AttendanceRecord todayRecord;
+    private ListenerRegistration userListener;
+    private ListenerRegistration attendanceListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,16 +54,16 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
 
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
-        
+
         setSupportActionBar(binding.toolbar);
 
         // Setup Navigation Component
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.nav_host_fragment_employee);
-        
+
         if (navHostFragment != null) {
             NavController navController = navHostFragment.getNavController();
-            
+
             // Destinations that are considered "Top Level"
             AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(
                     R.id.nav_employee_checkin, 
@@ -79,20 +82,28 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         FirebaseUser fbUser = mAuth.getCurrentUser();
         if (fbUser == null) return;
 
-        // Listen for today's attendance to enable/disable Emergency Leave menu
-        String dateId = TimeUtils.getCurrentDateId();
-        db.collection("users").document(fbUser.getUid()).get().addOnSuccessListener(userDoc -> {
-            User u = userDoc.toObject(User.class);
-            if (u != null && u.getEmployeeId() != null) {
-                String recordId = u.getEmployeeId() + "_" + dateId;
-                db.collection("attendance").document(recordId).addSnapshotListener((snapshot, e) -> {
-                    if (snapshot != null && snapshot.exists()) {
-                        todayRecord = snapshot.toObject(AttendanceRecord.class);
-                    } else {
-                        todayRecord = null;
-                    }
-                    invalidateOptionsMenu(); // Refresh the menu state
-                });
+        // FIXED LOGIC: Changed .get() to .addSnapshotListener to ensure real-time sync of employeeId
+        userListener = db.collection("users").document(fbUser.getUid()).addSnapshotListener((userDoc, error) -> {
+            if (userDoc != null && userDoc.exists()) {
+                User u = userDoc.toObject(User.class);
+                if (u != null && u.getEmployeeId() != null) {
+                    
+                    // Avoid creating multiple attendance listeners
+                    if (attendanceListener != null) attendanceListener.remove();
+
+                    String dateId = TimeUtils.getCurrentDateId();
+                    String recordId = u.getEmployeeId() + "_" + dateId;
+
+                    attendanceListener = db.collection("attendance").document(recordId).addSnapshotListener((snapshot, e) -> {
+                        if (snapshot != null && snapshot.exists()) {
+                            todayRecord = snapshot.toObject(AttendanceRecord.class);
+                        } else {
+                            todayRecord = null;
+                        }
+                        // Refresh the menu state immediately when check-in data changes
+                        invalidateOptionsMenu(); 
+                    });
+                }
             }
         });
     }
@@ -111,7 +122,7 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                             // 1. Check if basic profile data is missing
                             if (currentUser.getPhone() == null || currentUser.getPhone().isEmpty() || 
                                 currentUser.getPhotoUrl() == null || currentUser.getPhotoUrl().isEmpty()) {
-                                
+
                                 Toast.makeText(this, "Please complete your profile first.", Toast.LENGTH_SHORT).show();
                                 startActivity(new Intent(this, EmployeeProfileActivity.class));
                                 // We don't finish() here so they can come back after saving
@@ -157,9 +168,9 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
             boolean canTakeLeave = todayRecord != null && 
                                    todayRecord.getCheckInTime() != null && 
                                    todayRecord.getCheckOutTime() == null;
-            
+
             emergencyItem.setEnabled(canTakeLeave);
-            
+
             // FIXED: Added null check for getIcon() to prevent NullPointerException
             if (emergencyItem.getIcon() != null) {
                 emergencyItem.getIcon().setAlpha(canTakeLeave ? 255 : 128);
@@ -224,6 +235,10 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
      * 4. Returns to the absolute landing page (Splash/Role Selection).
      */
     private void logout() {
+        // Clean up listeners
+        if (userListener != null) userListener.remove();
+        if (attendanceListener != null) attendanceListener.remove();
+        
         // 1. Sign out from Firebase
         mAuth.signOut();
 
