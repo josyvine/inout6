@@ -10,9 +10,11 @@
 
     <!-- NEW: Emergency Leave Action -->
     <!-- This is enabled only after check-in and before check-out -->
+    <!-- Added android:icon to prevent NullPointerException in Java logic -->
     <item
         android:id="@+id/action_emergency_leave"
         android:title="Emergency Leave"
+        android:icon="@android:drawable/ic_menu_today"
         app:showAsAction="never" />
 
     <!-- Standard Logout action -->
