@@ -8,9 +8,24 @@
         android:title="Edit Profile"
         app:showAsAction="never" />
 
-    <!-- NEW: Emergency Leave Action -->
+    <!-- NEW: Medical Leave Action -->
+    <!-- Used to request permission for medical absence -->
+    <item
+        android:id="@+id/action_medical_leave"
+        android:title="Medical Leave"
+        android:icon="@android:drawable/ic_menu_agenda"
+        app:showAsAction="never" />
+
+    <!-- NEW: Resume Action -->
+    <!-- Used to enable check-in for rejoining or late starts -->
+    <item
+        android:id="@+id/action_resume"
+        android:title="Resume"
+        android:icon="@android:drawable/ic_menu_revert"
+        app:showAsAction="never" />
+
+    <!-- Emergency Leave Action -->
     <!-- This is enabled only after check-in and before check-out -->
-    <!-- Added android:icon to prevent NullPointerException in Java logic -->
     <item
         android:id="@+id/action_emergency_leave"
         android:title="Emergency Leave"
