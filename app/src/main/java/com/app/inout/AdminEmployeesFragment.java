@@ -28,8 +28,10 @@ import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.firestore.WriteBatch;
 import com.inout.app.databinding.FragmentAdminEmployeesBinding;
+import com.inout.app.models.AttendanceRecord;
 import com.inout.app.models.User;
 import com.inout.app.models.CompanyConfig;
+import com.inout.app.utils.TimeUtils;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -39,7 +41,7 @@ import java.util.Locale;
 /**
  * Updated Fragment to handle Multi-Selection, Bulk Deletion, 
  * Individual/Bulk Location Assignment, Traveling Mode, and Shift Timing.
- * UPDATED: Handles Emergency Leave approvals.
+ * UPDATED: Handles Emergency Leave and Medical Leave (Paid/Unpaid) approvals.
  */
 public class AdminEmployeesFragment extends Fragment implements EmployeeListAdapter.OnEmployeeActionListener {
 
@@ -125,12 +127,14 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
 
     /**
      * Handles individual "Approve" button on the employee card.
-     * UPDATED: Detects if approval is for Emergency Leave or initial account setup.
+     * UPDATED: Routes to Emergency Leave, Medical Leave, or standard Approval.
      */
     @Override
     public void onApproveClicked(User user) {
         if ("pending".equals(user.getEmergencyLeaveStatus())) {
             showEmergencyLeaveApprovalDialog(user);
+        } else if ("pending".equals(user.getMedicalLeaveStatus())) {
+            showMedicalLeaveDecisionDialog(user);
         } else {
             if (locationList.isEmpty()) {
                 Toast.makeText(getContext(), "Please add an Office Location first!", Toast.LENGTH_LONG).show();
@@ -138,6 +142,50 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
             }
             showIndividualApproveDialog(user);
         }
+    }
+
+    /**
+     * NEW: Dialog to handle Medical Leave (Asking Paid vs Unpaid).
+     */
+    private void showMedicalLeaveDecisionDialog(User user) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle("Medical Leave Decision");
+        builder.setMessage("Grant medical leave for " + user.getName() + "? Choose leave type:");
+
+        builder.setPositiveButton("Paid Leave", (dialog, which) -> {
+            processMedicalLeaveApproval(user, "paid");
+        });
+
+        builder.setNeutralButton("Unpaid Leave", (dialog, which) -> {
+            processMedicalLeaveApproval(user, "unpaid");
+        });
+
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+
+    private void processMedicalLeaveApproval(User user, String type) {
+        String dateId = TimeUtils.getCurrentDateId();
+        String recordId = user.getEmployeeId() + "_" + dateId;
+        String remarks = user.getName() + " on Medical Leave (" + type.toUpperCase() + ")";
+
+        // 1. Update User Document
+        db.collection("users").document(user.getUid())
+                .update("medicalLeaveStatus", "approved", "medicalLeaveType", type)
+                .addOnSuccessListener(aVoid -> {
+                    // 2. Update/Create Attendance Record with remarks
+                    db.collection("attendance").document(recordId)
+                            .update("medicalLeaveType", type, "remarks", remarks)
+                            .addOnFailureListener(e -> {
+                                // If no check-in record exists yet, create one
+                                AttendanceRecord rec = new AttendanceRecord(user.getEmployeeId(), user.getName(), dateId, TimeUtils.getCurrentTimestamp());
+                                rec.setRecordId(recordId);
+                                rec.setMedicalLeaveType(type);
+                                rec.setRemarks(remarks);
+                                db.collection("attendance").document(recordId).set(rec);
+                            });
+                    Toast.makeText(getContext(), "Medical Leave (" + type + ") approved.", Toast.LENGTH_SHORT).show();
+                });
     }
 
     /**
