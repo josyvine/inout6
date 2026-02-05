@@ -30,11 +30,14 @@ import com.inout.app.utils.EncryptionHelper;
 import com.inout.app.utils.LocationHelper;
 import com.inout.app.utils.TimeUtils;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Main dashboard for Employees.
  * Handles navigation between Check-In/Out and Attendance History.
  * Monitors Admin Approval status and Profile completeness.
- * UPDATED: Handles Emergency Leave request logic from Top Menu.
+ * UPDATED: Handles Emergency Leave, Medical Leave, and Resume logic.
  */
 public class EmployeeDashboardActivity extends AppCompatActivity {
 
@@ -57,14 +60,12 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
 
         setSupportActionBar(binding.toolbar);
 
-        // Setup Navigation Component
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.nav_host_fragment_employee);
 
         if (navHostFragment != null) {
             NavController navController = navHostFragment.getNavController();
 
-            // Destinations that are considered "Top Level"
             AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(
                     R.id.nav_employee_checkin, 
                     R.id.nav_employee_history)
@@ -82,17 +83,15 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         FirebaseUser fbUser = mAuth.getCurrentUser();
         if (fbUser == null) return;
 
-        // FIXED LOGIC: Changed .get() to .addSnapshotListener to ensure real-time sync of employeeId
         userListener = db.collection("users").document(fbUser.getUid()).addSnapshotListener((userDoc, error) -> {
             if (userDoc != null && userDoc.exists()) {
-                User u = userDoc.toObject(User.class);
-                if (u != null && u.getEmployeeId() != null) {
+                currentUser = userDoc.toObject(User.class);
+                if (currentUser != null && currentUser.getEmployeeId() != null) {
                     
-                    // Avoid creating multiple attendance listeners
                     if (attendanceListener != null) attendanceListener.remove();
 
                     String dateId = TimeUtils.getCurrentDateId();
-                    String recordId = u.getEmployeeId() + "_" + dateId;
+                    String recordId = currentUser.getEmployeeId() + "_" + dateId;
 
                     attendanceListener = db.collection("attendance").document(recordId).addSnapshotListener((snapshot, e) -> {
                         if (snapshot != null && snapshot.exists()) {
@@ -100,7 +99,6 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                         } else {
                             todayRecord = null;
                         }
-                        // Refresh the menu state immediately when check-in data changes
                         invalidateOptionsMenu(); 
                     });
                 }
@@ -117,20 +115,17 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                     if (error != null) return;
 
                     if (snapshot != null && snapshot.exists()) {
-                        currentUser = snapshot.toObject(User.class);
-                        if (currentUser != null) {
-                            // 1. Check if basic profile data is missing
-                            if (currentUser.getPhone() == null || currentUser.getPhone().isEmpty() || 
-                                currentUser.getPhotoUrl() == null || currentUser.getPhotoUrl().isEmpty()) {
+                        User user = snapshot.toObject(User.class);
+                        if (user != null) {
+                            if (user.getPhone() == null || user.getPhone().isEmpty() || 
+                                user.getPhotoUrl() == null || user.getPhotoUrl().isEmpty()) {
 
                                 Toast.makeText(this, "Please complete your profile first.", Toast.LENGTH_SHORT).show();
                                 startActivity(new Intent(this, EmployeeProfileActivity.class));
-                                // We don't finish() here so they can come back after saving
                                 return;
                             }
 
-                            // 2. Check for Admin Approval
-                            if (!currentUser.isApproved()) {
+                            if (!user.isApproved()) {
                                 showWaitingOverlay(true);
                             } else {
                                 showWaitingOverlay(false);
@@ -140,9 +135,6 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                 });
     }
 
-    /**
-     * Shows or hides an overlay that blocks interaction until the admin approves the account.
-     */
     private void showWaitingOverlay(boolean show) {
         if (show) {
             binding.layoutWaitingApproval.setVisibility(View.VISIBLE);
@@ -163,19 +155,31 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
         MenuItem emergencyItem = menu.findItem(R.id.action_emergency_leave);
+        MenuItem medicalItem = menu.findItem(R.id.action_medical_leave);
+        MenuItem resumeItem = menu.findItem(R.id.action_resume);
+
+        boolean checkedIn = todayRecord != null && todayRecord.getCheckInTime() != null;
+        boolean checkedOut = todayRecord != null && todayRecord.getCheckOutTime() != null;
+
         if (emergencyItem != null) {
-            // Logic: Enabled only if Checked In AND Not Checked Out
-            boolean canTakeLeave = todayRecord != null && 
-                                   todayRecord.getCheckInTime() != null && 
-                                   todayRecord.getCheckOutTime() == null;
-
-            emergencyItem.setEnabled(canTakeLeave);
-
-            // FIXED: Added null check for getIcon() to prevent NullPointerException
-            if (emergencyItem.getIcon() != null) {
-                emergencyItem.getIcon().setAlpha(canTakeLeave ? 255 : 128);
-            }
+            boolean canEmergency = checkedIn && !checkedOut;
+            emergencyItem.setEnabled(canEmergency);
+            if (emergencyItem.getIcon() != null) emergencyItem.getIcon().setAlpha(canEmergency ? 255 : 128);
         }
+
+        if (medicalItem != null) {
+            boolean canMedical = !checkedIn; // Only before start of work
+            medicalItem.setEnabled(canMedical);
+            if (medicalItem.getIcon() != null) medicalItem.getIcon().setAlpha(canMedical ? 255 : 128);
+        }
+
+        if (resumeItem != null) {
+            // Resume enabled if not checked in (for rejoining after leave or late start)
+            boolean canResume = !checkedIn; 
+            resumeItem.setEnabled(canResume);
+            if (resumeItem.getIcon() != null) resumeItem.getIcon().setAlpha(canResume ? 255 : 128);
+        }
+
         return super.onPrepareOptionsMenu(menu);
     }
 
@@ -188,11 +192,42 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         } else if (id == R.id.action_emergency_leave) {
             handleEmergencyLeaveRequest();
             return true;
+        } else if (id == R.id.action_medical_leave) {
+            handleMedicalLeaveRequest();
+            return true;
+        } else if (id == R.id.action_resume) {
+            handleResumeRequest();
+            return true;
         } else if (id == R.id.action_logout) {
             logout();
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void handleMedicalLeaveRequest() {
+        if (currentUser == null) return;
+        db.collection("users").document(currentUser.getUid())
+                .update("medicalLeaveStatus", "pending")
+                .addOnSuccessListener(aVoid -> Toast.makeText(this, "Medical Leave Permission Requested.", Toast.LENGTH_LONG).show());
+    }
+
+    private void handleResumeRequest() {
+        if (currentUser == null) return;
+        String dateId = TimeUtils.getCurrentDateId();
+        String recordId = currentUser.getEmployeeId() + "_" + dateId;
+
+        // Mark that resume was requested to force-enable check-in buttons
+        db.collection("attendance").document(recordId)
+                .update("resumeRequested", true)
+                .addOnFailureListener(e -> {
+                    // If record doesn't exist yet, create a shell record
+                    AttendanceRecord newRecord = new AttendanceRecord(currentUser.getEmployeeId(), currentUser.getName(), dateId, TimeUtils.getCurrentTimestamp());
+                    newRecord.setRecordId(recordId);
+                    newRecord.setResumeRequested(true);
+                    db.collection("attendance").document(recordId).set(newRecord);
+                })
+                .addOnSuccessListener(aVoid -> Toast.makeText(this, "Resume enabled. You can now Check-In.", Toast.LENGTH_SHORT).show());
     }
 
     private void handleEmergencyLeaveRequest() {
@@ -205,55 +240,37 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                 String leaveLoc = todayRecord.getLocationName();
                 String remarks = "Emergency leave at " + leaveLoc + " took at " + leaveTime;
 
-                // Update Attendance Record
                 db.collection("attendance").document(todayRecord.getRecordId())
                         .update("emergencyLeaveTime", leaveTime,
                                 "emergencyLeaveLocation", leaveLoc,
                                 "remarks", remarks)
                         .addOnSuccessListener(aVoid -> {
-                            // Update User Status to Pending
                             db.collection("users").document(currentUser.getUid())
                                     .update("emergencyLeaveStatus", "pending")
                                     .addOnSuccessListener(aVoid2 -> {
-                                        Toast.makeText(EmployeeDashboardActivity.this, "Emergency Leave Requested. Waiting for Admin Approval.", Toast.LENGTH_LONG).show();
+                                        Toast.makeText(EmployeeDashboardActivity.this, "Emergency Leave Requested.", Toast.LENGTH_LONG).show();
                                     });
                         });
             }
 
             @Override
             public void onError(String errorMsg) {
-                Toast.makeText(EmployeeDashboardActivity.this, "Location required for Emergency Leave.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(EmployeeDashboardActivity.this, "Location required.", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    /**
-     * UPDATED: Full Logout Logic.
-     * 1. Signs out of Firebase.
-     * 2. Signs out of Google (forces account picker for next login).
-     * 3. Clears the "Employee" role from local storage.
-     * 4. Returns to the absolute landing page (Splash/Role Selection).
-     */
     private void logout() {
-        // Clean up listeners
         if (userListener != null) userListener.remove();
         if (attendanceListener != null) attendanceListener.remove();
-        
-        // 1. Sign out from Firebase
         mAuth.signOut();
-
-        // 2. Configure and sign out from Google to allow picking a different Gmail next time
         String webClientId = EncryptionHelper.getInstance(this).getWebClientId();
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(webClientId)
                 .build();
         GoogleSignInClient googleSignInClient = GoogleSignIn.getClient(this, gso);
-
         googleSignInClient.signOut().addOnCompleteListener(task -> {
-            // 3. Clear the stored Role (Employee) locally
             EncryptionHelper.getInstance(EmployeeDashboardActivity.this).clearUserRole();
-
-            // 4. Return to SplashActivity and clear the entire activity history stack
             Intent intent = new Intent(EmployeeDashboardActivity.this, SplashActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
