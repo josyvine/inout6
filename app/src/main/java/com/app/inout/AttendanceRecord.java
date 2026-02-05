@@ -7,8 +7,8 @@ import java.util.List;
 
 /**
  * Professional Model class for a daily attendance record.
- * Supports Check-In, 13-column CSV, Transit Logic, and Shift/Overtime tracking.
- * UPDATED: Added Emergency Leave tracking and Remarks for CSV reporting.
+ * Supports Check-In, 14-column CSV, Transit Logic, and Shift/Overtime tracking.
+ * UPDATED: Added Resume tracking and Medical Leave type for daily reporting.
  */
 @IgnoreExtraProperties
 public class AttendanceRecord {
@@ -40,10 +40,14 @@ public class AttendanceRecord {
     private String overtimeHours;   // e.g. "3h 00m"
     private String startLocationName; // Where the travel started (e.g. "Home")
 
-    // NEW FIELDS FOR EMERGENCY LEAVE
+    // FIELDS FOR EMERGENCY LEAVE
     private String emergencyLeaveTime;
     private String emergencyLeaveLocation;
     private String remarks;
+
+    // NEW FIELDS FOR MEDICAL LEAVE & RESUME
+    private boolean resumeRequested; 
+    private String medicalLeaveType; // "none", "paid", "unpaid"
 
     // Security flags
     private boolean fingerprintVerified;
@@ -56,6 +60,7 @@ public class AttendanceRecord {
      */
     public AttendanceRecord() {
         this.movementLog = new ArrayList<>();
+        this.medicalLeaveType = "none";
     }
 
     /**
@@ -69,16 +74,23 @@ public class AttendanceRecord {
         this.fingerprintVerified = true; 
         this.gpsVerified = true;    
         this.movementLog = new ArrayList<>();
+        this.medicalLeaveType = "none";
     }
 
     /**
      * Helper to determine status for the UI logic.
-     * UPDATED: If Emergency Leave was taken and no checkout occurred, consider Absent.
+     * UPDATED: Handles Medical Leave and Resume status priorities.
      */
     public String getStatus() {
+        // If Medical Leave was granted and they haven't finished a resumed shift
+        if (!"none".equals(medicalLeaveType) && checkOutTime == null) {
+            return "Absent";
+        }
+        // Existing Emergency Leave logic
         if (emergencyLeaveTime != null && checkOutTime == null) {
             return "Absent";
         }
+        // Standard Presence logic
         if (checkInTime != null && checkOutTime != null && fingerprintVerified && gpsVerified) {
             return "Present";
         } else if (checkInTime != null) {
@@ -191,7 +203,6 @@ public class AttendanceRecord {
     public String getStartLocationName() { return startLocationName; }
     public void setStartLocationName(String startLocationName) { this.startLocationName = startLocationName; }
 
-    // NEW EMERGENCY LEAVE GETTERS/SETTERS
     @PropertyName("emergencyLeaveTime")
     public String getEmergencyLeaveTime() { return emergencyLeaveTime; }
     public void setEmergencyLeaveTime(String emergencyLeaveTime) { this.emergencyLeaveTime = emergencyLeaveTime; }
@@ -203,6 +214,14 @@ public class AttendanceRecord {
     @PropertyName("remarks")
     public String getRemarks() { return remarks; }
     public void setRemarks(String remarks) { this.remarks = remarks; }
+
+    @PropertyName("resumeRequested")
+    public boolean isResumeRequested() { return resumeRequested; }
+    public void setResumeRequested(boolean resumeRequested) { this.resumeRequested = resumeRequested; }
+
+    @PropertyName("medicalLeaveType")
+    public String getMedicalLeaveType() { return medicalLeaveType; }
+    public void setMedicalLeaveType(String medicalLeaveType) { this.medicalLeaveType = medicalLeaveType; }
 
     @PropertyName("fingerprintVerified")
     public boolean isFingerprintVerified() { return fingerprintVerified; }
