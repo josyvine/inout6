@@ -7,7 +7,7 @@ import com.google.firebase.firestore.PropertyName;
  * Model class representing a user in the 'users' Firestore collection.
  * This is the bridge between Firestore and the app memory.
  * FIXED: Added PropertyName annotations to ensure data syncs correctly in Release APKs.
- * UPDATED: Added Emergency Leave status tracking.
+ * UPDATED: Added Emergency Leave and Medical Leave status tracking.
  */
 @IgnoreExtraProperties
 public class User {
@@ -24,17 +24,23 @@ public class User {
     // For Employees: The ID of the location they are assigned to for check-in
     private String assignedLocationId; 
 
-    // NEW FIELDS FOR TRAVELING AND SHIFTS
+    // FIELDS FOR TRAVELING AND SHIFTS
     private boolean isTraveling;
     private String shiftStartTime; 
     private String shiftEndTime;   
 
-    // NEW FIELD FOR EMERGENCY LEAVE
+    // FIELD FOR EMERGENCY LEAVE
     private String emergencyLeaveStatus; // "none", "pending", "approved"
 
+    // NEW FIELDS FOR MEDICAL LEAVE
+    private String medicalLeaveStatus; // "none", "pending", "approved"
+    private String medicalLeaveType;   // "none", "paid", "unpaid"
+
     public User() {
-        // Default constructor required for calls to DataSnapshot.getValue(User.class)
+        // Default constructor required for Firestore
         this.emergencyLeaveStatus = "none";
+        this.medicalLeaveStatus = "none";
+        this.medicalLeaveType = "none";
     }
 
     public User(String uid, String email, String role) {
@@ -43,6 +49,8 @@ public class User {
         this.role = role;
         this.approved = false;
         this.emergencyLeaveStatus = "none";
+        this.medicalLeaveStatus = "none";
+        this.medicalLeaveType = "none";
     }
 
     // Getters and Setters with explicit PropertyName mapping
@@ -137,8 +145,6 @@ public class User {
         this.assignedLocationId = assignedLocationId;
     }
 
-    // NEW METHODS START HERE
-
     @PropertyName("isTraveling")
     public boolean isTraveling() {
         return isTraveling;
@@ -177,5 +183,24 @@ public class User {
     @PropertyName("emergencyLeaveStatus")
     public void setEmergencyLeaveStatus(String emergencyLeaveStatus) {
         this.emergencyLeaveStatus = emergencyLeaveStatus;
+    }
+
+    @PropertyName("medicalLeaveStatus")
+    public String getMedicalLeaveStatus() {
+        return medicalLeaveStatus;
+    }
+
+    @PropertyName("medicalLeaveStatus")
+    public void setMedicalLeaveStatus(String medicalLeaveStatus) {
+        this.medicalLeaveStatus = medicalLeaveStatus;
+    }
+
+    @PropertyName("medicalLeaveType")
+    public String getMedicalLeaveType() {
+        return medicalLeaveType;
+    }
+
+    public void setMedicalLeaveType(String medicalLeaveType) {
+        this.medicalLeaveType = medicalLeaveType;
     }
 }
