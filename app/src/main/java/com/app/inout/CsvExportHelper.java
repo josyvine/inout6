@@ -18,8 +18,7 @@ import java.util.List;
 
 /**
  * Utility to generate and share professional attendance reports.
- * UPDATED: Matches the 14-column table layout including Shift, Overtime, and Remarks.
- * Handles specific Emergency Leave logic for total hour calculation and Remarks.
+ * UPDATED: Handles 14-column layout with complex logic for Medical Leave (Paid/Unpaid) and Resume (Late Start).
  */
 public class CsvExportHelper {
 
@@ -27,10 +26,6 @@ public class CsvExportHelper {
 
     /**
      * Converts the full month list into a CSV-formatted string and opens the share menu.
-     * 
-     * @param context   Activity or Fragment context.
-     * @param records   The list of 30/31 records (including Absents).
-     * @param fileName  Suggested name for the file (e.g., "Josy_Vine_Jan_2026.csv").
      */
     public static void exportAttendanceToCsv(Context context, List<AttendanceRecord> records, String fileName) {
         
@@ -43,45 +38,53 @@ public class CsvExportHelper {
             String date = record.getDate();
             String day = record.getDayOfWeek();
             String in = (record.getCheckInTime() != null) ? record.getCheckInTime() : "--";
-            
-            // Transit Route (Wrapped in quotes to handle arrows safely)
             String transit = record.getTransitSummary();
-            
             String out = (record.getCheckOutTime() != null) ? record.getCheckOutTime() : "--";
-            
-            // Shift Info
-            String shift = (record.getAssignedShift() != null) ? record.getAssignedShift() : "--";
-            
-            // Overtime Info
+            String shiftInfo = (record.getAssignedShift() != null) ? record.getAssignedShift() : "--";
             String overtime = (record.getOvertimeHours() != null) ? record.getOvertimeHours() : "--";
-            
             String location = (record.getLocationName() != null) ? record.getLocationName() : "N/A";
             String distance = (record.getCheckInTime() != null) ? String.valueOf(Math.round(record.getDistanceMeters())) : "--";
             
-            // Convert Booleans to professional text proof
             String finger = record.isFingerprintVerified() ? "YES" : "NO";
             String gps = record.isGpsVerified() ? "YES" : "NO";
             
-            // Logic for Status, Hours, and Remarks based on Emergency Leave
+            // LOGIC SETUP
             String status = record.getStatus();
             String hours = (record.getTotalHours() != null) ? record.getTotalHours() : "0h 00m";
             String remarks = (record.getRemarks() != null) ? record.getRemarks() : "";
 
-            // LOGIC: If employee took emergency leave and DID NOT resume duty (Check-Out is null)
+            // SCENARIO 1: Emergency Leave (Not Resumed)
             if (record.getEmergencyLeaveTime() != null && record.getCheckOutTime() == null) {
-                status = "Absent"; // Overwrite status to Absent as per requirement
-                // Calculate worked duration until the moment emergency leave was clicked
+                status = "Absent";
                 hours = TimeUtils.calculateDuration(record.getCheckInTime(), record.getEmergencyLeaveTime());
             }
 
-            // Append row to string 
-            // Note: Transit, Location, and Remarks are wrapped in quotes to handle special characters safely
+            // SCENARIO 2: Resumed Work (Check-Out exists)
+            if (record.getCheckOutTime() != null) {
+                String shiftDuration = calculateShiftDuration(shiftInfo);
+                
+                // If it was Paid Medical Leave and they resumed work
+                if ("paid".equals(record.getMedicalLeaveType())) {
+                    hours = shiftDuration; // Record as normal working hours
+                } 
+                // If it was a Resume (Late on duty or Unpaid Medical)
+                else if (record.isResumeRequested()) {
+                    String lateRemark = " | Checked out after " + hours + " (Assigned: " + shiftDuration + ")";
+                    if ("none".equals(record.getMedicalLeaveType()) || record.getMedicalLeaveType() == null) {
+                        remarks += " | Late Start" + lateRemark;
+                    } else {
+                        remarks += lateRemark;
+                    }
+                }
+            }
+
+            // Append row to string (Wrap multi-word strings in quotes)
             csvData.append(date).append(",")
                     .append(day).append(",")
                     .append(in).append(",")
                     .append("\"").append(transit).append("\",")
                     .append(out).append(",")
-                    .append(shift).append(",")
+                    .append(shiftInfo).append(",")
                     .append(hours).append(",")
                     .append(overtime).append(",")
                     .append("\"").append(location).append("\",")
@@ -92,7 +95,7 @@ public class CsvExportHelper {
                     .append("\"").append(remarks).append("\"\n");
         }
 
-        // 3. Save to a temporary file for sharing (Zero Billing/No Permanent Storage)
+        // 3. Save and Share
         try {
             File folder = new File(context.getCacheDir(), "reports");
             if (!folder.exists()) folder.mkdirs();
@@ -102,7 +105,6 @@ public class CsvExportHelper {
             outStream.write(csvData.toString().getBytes());
             outStream.close();
 
-            // 4. Share the file via Intent
             shareCsvFile(context, file);
 
         } catch (IOException e) {
@@ -111,16 +113,29 @@ public class CsvExportHelper {
         }
     }
 
+    /**
+     * Helper to extract duration from a shift string like "09:00 AM - 06:00 PM"
+     */
+    private static String calculateShiftDuration(String shiftStr) {
+        if (shiftStr == null || !shiftStr.contains("-")) return "0h 00m";
+        try {
+            String[] parts = shiftStr.split("-");
+            if (parts.length == 2) {
+                return TimeUtils.calculateDuration(parts[0].trim(), parts[1].trim());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Shift parse error", e);
+        }
+        return "0h 00m";
+    }
+
     private static void shareCsvFile(Context context, File file) {
-        // Use the FileProvider defined in your AndroidManifest
         Uri path = FileProvider.getUriForFile(context, "com.inout.app.fileprovider", file);
-        
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("text/csv");
         intent.putExtra(Intent.EXTRA_SUBJECT, "Attendance Report Export");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.putExtra(Intent.EXTRA_STREAM, path);
-        
         context.startActivity(Intent.createChooser(intent, "Export Report via:"));
     }
 }
