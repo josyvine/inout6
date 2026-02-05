@@ -20,7 +20,7 @@ import java.util.Set;
 
 /**
  * Adapter to handle Multi-Selection, Bulk Actions, and Individual Approvals.
- * UPDATED: Displays Emergency Leave status for Admin visibility.
+ * UPDATED: Displays Emergency Leave and Medical Leave status for Admin visibility.
  */
 public class EmployeeListAdapter extends RecyclerView.Adapter<EmployeeListAdapter.EmployeeViewHolder> {
 
@@ -58,13 +58,19 @@ public class EmployeeListAdapter extends RecyclerView.Adapter<EmployeeListAdapte
         holder.tvPhone.setText(user.getPhone() != null ? user.getPhone() : "No Phone");
         
         // Handle Status Display
-        // NEW LOGIC: Check for Emergency Leave Request first
+        // NEW LOGIC: Priority order for status alerts
         if ("pending".equals(user.getEmergencyLeaveStatus())) {
             holder.tvStatus.setText("Status: Emergency Leave Pending");
             holder.tvStatus.setTextColor(context.getResources().getColor(android.R.color.holo_red_dark));
             holder.btnApprove.setVisibility(View.VISIBLE);
             holder.btnApprove.setText("Review Leave");
         } 
+        else if ("pending".equals(user.getMedicalLeaveStatus())) {
+            holder.tvStatus.setText("Status: Medical Leave Request");
+            holder.tvStatus.setTextColor(context.getResources().getColor(android.R.color.holo_red_dark));
+            holder.btnApprove.setVisibility(View.VISIBLE);
+            holder.btnApprove.setText("Review Request");
+        }
         else if (user.isApproved()) {
             String idSuffix = (user.getEmployeeId() != null) ? " (" + user.getEmployeeId() + ")" : "";
             holder.tvStatus.setText("Status: Approved" + idSuffix);
