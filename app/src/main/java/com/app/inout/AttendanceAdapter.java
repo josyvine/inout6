@@ -1,5 +1,6 @@
 package com.inout.app.adapters;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,8 +18,7 @@ import java.util.List;
 
 /**
  * Professional Adapter for the 14-column CSV attendance table.
- * UPDATED: Handles Transit Route, Assigned Shift, Overtime, and Remarks columns.
- * Logic included for Emergency Leave hour calculations in the UI.
+ * UPDATED: Handles logic for Paid Medical Leave (Full Shift Credit) and Resume/Late Start hours.
  */
 public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.AttendanceViewHolder> {
 
@@ -39,7 +39,7 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
     public void onBindViewHolder(@NonNull AttendanceViewHolder holder, int position) {
         AttendanceRecord record = attendanceList.get(position);
 
-        // Reset Alpha for recycled views to prevent visual glitches
+        // Reset Alpha for recycled views
         holder.tvDate.setAlpha(1.0f);
         holder.tvDay.setAlpha(1.0f);
 
@@ -59,12 +59,18 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
         // 5. Assigned Shift
         holder.tvShift.setText(record.getAssignedShift() != null ? record.getAssignedShift() : "--");
 
-        // 6. Total Hours (With Emergency Leave Calculation Logic)
+        // 6. Total Hours Logic (Enhanced for Resume/Medical)
         String hoursDisplay = record.getTotalHours() != null ? record.getTotalHours() : "0h 00m";
-        // Logic: If they took emergency leave and didn't check out, calculate hours till leave click
+
+        // Scenario A: Emergency Leave (Not Resumed)
         if (record.getEmergencyLeaveTime() != null && record.getCheckOutTime() == null) {
             hoursDisplay = TimeUtils.calculateDuration(record.getCheckInTime(), record.getEmergencyLeaveTime());
         }
+        // Scenario B: Paid Medical Leave + Resumed Work (Full Shift Credit)
+        else if ("paid".equals(record.getMedicalLeaveType()) && record.getCheckOutTime() != null) {
+            hoursDisplay = calculateShiftDuration(record.getAssignedShift());
+        }
+        
         holder.tvTotalHours.setText(hoursDisplay);
 
         // 7. Overtime
@@ -80,7 +86,7 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
             holder.tvDistance.setText("--");
         }
 
-        // 10. Fingerprint Verification (Icon)
+        // 10. Fingerprint Verification
         if (record.getCheckInTime() != null) {
             holder.ivFingerprint.setImageResource(record.isFingerprintVerified() ? 
                     R.drawable.ic_status_present : R.drawable.ic_status_absent);
@@ -88,7 +94,7 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
             holder.ivFingerprint.setImageResource(R.drawable.ic_status_absent);
         }
 
-        // 11. GPS Verification (Icon)
+        // 11. GPS Verification
         if (record.getCheckInTime() != null) {
             holder.ivGps.setImageResource(record.isGpsVerified() ? 
                     R.drawable.ic_status_present : R.drawable.ic_status_absent);
@@ -96,21 +102,36 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
             holder.ivGps.setImageResource(R.drawable.ic_status_absent);
         }
 
-        // 12. Overall Status Logic
+        // 12. Overall Status
         String status = record.getStatus();
         if (status.equals("Present")) {
             holder.ivStatus.setImageResource(R.drawable.ic_status_present);
         } else if (status.equals("Partial")) {
             holder.ivStatus.setImageResource(R.drawable.ic_status_partial);
         } else {
-            // Absent (includes Emergency Leave without Resume)
             holder.ivStatus.setImageResource(R.drawable.ic_status_absent);
             holder.tvDate.setAlpha(0.5f);
             holder.tvDay.setAlpha(0.5f);
         }
 
-        // 13. NEW: Remarks
+        // 13. Remarks
         holder.tvRemarks.setText(record.getRemarks() != null ? record.getRemarks() : "");
+    }
+
+    /**
+     * Helper to calculate the full duration of an assigned shift string for UI credit.
+     */
+    private String calculateShiftDuration(String shiftStr) {
+        if (shiftStr == null || !shiftStr.contains("-")) return "0h 00m";
+        try {
+            String[] parts = shiftStr.split("-");
+            if (parts.length == 2) {
+                return TimeUtils.calculateDuration(parts[0].trim(), parts[1].trim());
+            }
+        } catch (Exception e) {
+            Log.e("AttendanceAdapter", "Shift parse error", e);
+        }
+        return "0h 00m";
     }
 
     @Override
@@ -118,9 +139,6 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
         return attendanceList.size();
     }
 
-    /**
-     * ViewHolder maps the 14 columns defined in item_attendance_row.xml
-     */
     static class AttendanceViewHolder extends RecyclerView.ViewHolder {
         TextView tvDate, tvDay, tvIn, tvTransit, tvOut, tvShift, tvTotalHours, tvOvertime, tvLocation, tvDistance, tvRemarks;
         ImageView ivFingerprint, ivGps, ivStatus;
@@ -140,7 +158,7 @@ public class AttendanceAdapter extends RecyclerView.Adapter<AttendanceAdapter.At
             ivFingerprint = itemView.findViewById(R.id.iv_col_fingerprint);
             ivGps = itemView.findViewById(R.id.iv_col_gps);
             ivStatus = itemView.findViewById(R.id.iv_col_status);
-            tvRemarks = itemView.findViewById(R.id.tv_col_remarks); // New Field
+            tvRemarks = itemView.findViewById(R.id.tv_col_remarks);
         }
     }
 }
