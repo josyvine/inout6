@@ -200,6 +200,7 @@ public class User {
         return medicalLeaveType;
     }
 
+    @PropertyName("medicalLeaveType")
     public void setMedicalLeaveType(String medicalLeaveType) {
         this.medicalLeaveType = medicalLeaveType;
     }
