@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Fragment where employees perform Check-In, Transit, and Check-Out.
- * UPDATED: Includes logic to maintain button states and status message during Emergency Leave.
+ * UPDATED: Includes logic for Resume mode and Medical Leave status visibility.
  */
 public class EmployeeCheckInFragment extends Fragment {
 
@@ -151,10 +151,17 @@ public class EmployeeCheckInFragment extends Fragment {
 
         String locName = assignedLocation.getName();
 
-        if (todayRecord == null) {
-            // Case 1: Start of Day
+        // Case 1: Start of Day (todayRecord is null OR checkInTime is null but resume was requested)
+        if (todayRecord == null || (todayRecord.getCheckInTime() == null && todayRecord.isResumeRequested())) {
+            
             updateButtonState(true, false, false);
-            if (currentUser.isTraveling()) {
+
+            if (todayRecord != null && todayRecord.isResumeRequested()) {
+                binding.tvStatus.setText("Resume Mode: Ready to Check-In at " + locName);
+            } else if ("approved".equals(currentUser.getMedicalLeaveStatus())) {
+                binding.tvStatus.setText("Status: Medical Leave (" + currentUser.getMedicalLeaveType().toUpperCase() + "). Click Resume to work.");
+                updateButtonState(false, false, false); // Block check-in until Resume clicked
+            } else if (currentUser.isTraveling()) {
                 binding.tvStatus.setText("Status: Traveling Mode Enabled. Ready to Start.");
             } else {
                 binding.tvStatus.setText("Status: Ready to Check-In at " + locName);
@@ -170,7 +177,6 @@ public class EmployeeCheckInFragment extends Fragment {
                 allowTransit = true;
                 binding.tvStatus.setText("Transit Required: Move to " + locName);
             } else {
-                // NEW LOGIC: Show specifically if Emergency Leave was clicked
                 if (todayRecord.getEmergencyLeaveTime() != null) {
                     binding.tvStatus.setText("Status: On Emergency Leave. (Resumed duty? You can still transit or check-out)");
                 } else {
@@ -252,17 +258,21 @@ public class EmployeeCheckInFragment extends Fragment {
         });
     }
 
+    /**
+     * @param isRemoteStart If true, user is checking in from home/travel, not the office.
+     */
     private void performCheckIn(Location loc, float distance, boolean isRemoteStart) {
         String dateId = TimeUtils.getCurrentDateId();
         String recordId = currentUser.getEmployeeId() + "_" + dateId;
 
-        AttendanceRecord record = new AttendanceRecord(
-                currentUser.getEmployeeId(), 
-                currentUser.getName(), 
-                dateId, 
-                TimeUtils.getCurrentTimestamp());
+        AttendanceRecord record;
+        if (todayRecord != null) {
+            record = todayRecord; // Use the record created by Resume logic
+        } else {
+            record = new AttendanceRecord(currentUser.getEmployeeId(), currentUser.getName(), dateId, TimeUtils.getCurrentTimestamp());
+            record.setRecordId(recordId);
+        }
 
-        record.setRecordId(recordId);
         record.setCheckInTime(TimeUtils.getCurrentTime());
         record.setCheckInLat(loc.getLatitude());
         record.setCheckInLng(loc.getLongitude());
@@ -316,7 +326,6 @@ public class EmployeeCheckInFragment extends Fragment {
 
         String checkOutTime = TimeUtils.getCurrentTime();
         String totalHrs = TimeUtils.calculateDuration(todayRecord.getCheckInTime(), checkOutTime);
-        
         String overtimeStr = calculateOvertime(todayRecord.getCheckInTime(), checkOutTime);
 
         db.collection("attendance").document(todayRecord.getRecordId())
@@ -335,7 +344,6 @@ public class EmployeeCheckInFragment extends Fragment {
 
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.US);
-            
             Date shiftStart = sdf.parse(currentUser.getShiftStartTime());
             Date shiftEnd = sdf.parse(currentUser.getShiftEndTime());
             long shiftMillis = shiftEnd.getTime() - shiftStart.getTime();
