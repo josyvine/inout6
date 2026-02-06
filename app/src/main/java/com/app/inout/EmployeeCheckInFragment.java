@@ -36,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Fragment where employees perform Check-In, Transit, and Check-Out.
  * UPDATED: Includes logic for Resume mode, Medical Leave status, and strict Shift Start Time restriction.
+ * Coordinated with Activity for automatic UI refresh and spinning loaders.
  */
 public class EmployeeCheckInFragment extends Fragment {
 
@@ -155,8 +156,8 @@ public class EmployeeCheckInFragment extends Fragment {
         // Case 1: Start of Day (todayRecord is null OR checkInTime is null but resume was requested)
         if (todayRecord == null || (todayRecord.getCheckInTime() == null && todayRecord.isResumeRequested())) {
             
-            // LOGIC: Check if system time has reached assigned shift start time
-            boolean isTimeReached = TimeUtils.isTimeReached(currentUser.getShiftStartTime());
+            // Logic: Check if system time has reached assigned shift start time
+            boolean isTimeReached = isShiftTimeReached(currentUser.getShiftStartTime());
             // Resume requested bypasses the time restriction
             boolean canCheckInGate = isTimeReached || (todayRecord != null && todayRecord.isResumeRequested());
 
@@ -204,6 +205,21 @@ public class EmployeeCheckInFragment extends Fragment {
         }
     }
 
+    /**
+     * Logic: Verifies if the current system time is at or after the assigned shift start time.
+     */
+    private boolean isShiftTimeReached(String shiftStart) {
+        if (shiftStart == null || shiftStart.isEmpty() || shiftStart.equals("N/A")) return true;
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.US);
+            Date now = sdf.parse(sdf.format(new Date()));
+            Date start = sdf.parse(shiftStart);
+            return now != null && (now.after(start) || now.equals(start));
+        } catch (Exception e) {
+            return true; // Default to true if parsing fails to avoid blocking users
+        }
+    }
+
     private void initiateAction(int actionType) {
         if (assignedLocation == null) {
             Toast.makeText(getContext(), "Error: Office location not assigned.", Toast.LENGTH_LONG).show();
@@ -234,8 +250,6 @@ public class EmployeeCheckInFragment extends Fragment {
         locationHelper.getCurrentLocation(new LocationHelper.LocationResultCallback() {
             @Override
             public void onLocationResult(Location location) {
-                binding.progressBar.setVisibility(View.GONE);
-                
                 if (location != null) {
                     boolean inRange = LocationHelper.isWithinRadius(
                             location.getLatitude(), location.getLongitude(),
@@ -255,9 +269,12 @@ public class EmployeeCheckInFragment extends Fragment {
                         else if (actionType == ACTION_TRANSIT) performTransit(location, dist);
                         else if (actionType == ACTION_OUT) performCheckOut(location);
                     } else {
+                        binding.progressBar.setVisibility(View.GONE);
                         String msg = "Denied: You are not at " + assignedLocation.getName() + ".";
                         Toast.makeText(getContext(), msg, Toast.LENGTH_LONG).show();
                     }
+                } else {
+                    binding.progressBar.setVisibility(View.GONE);
                 }
             }
 
@@ -313,7 +330,11 @@ public class EmployeeCheckInFragment extends Fragment {
         record.setLastVerifiedLocationId(assignedLocation.getId());
 
         db.collection("attendance").document(recordId).set(record)
-                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-In Success!", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(aVoid -> {
+                    binding.progressBar.setVisibility(View.GONE);
+                    Toast.makeText(getContext(), "Check-In Success!", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> binding.progressBar.setVisibility(View.GONE));
     }
 
     private void performTransit(Location loc, float distance) {
@@ -329,7 +350,11 @@ public class EmployeeCheckInFragment extends Fragment {
                     "lastVerifiedLocationId", assignedLocation.getId(),
                     "movementLog", FieldValue.arrayUnion(newLocName)
                 )
-                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Transit Verified!", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(aVoid -> {
+                    binding.progressBar.setVisibility(View.GONE);
+                    Toast.makeText(getContext(), "Transit Verified!", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> binding.progressBar.setVisibility(View.GONE));
     }
 
     private void performCheckOut(Location loc) {
@@ -347,7 +372,11 @@ public class EmployeeCheckInFragment extends Fragment {
                         "totalHours", totalHrs,
                         "overtimeHours", overtimeStr 
                 )
-                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-Out Success!", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(aVoid -> {
+                    binding.progressBar.setVisibility(View.GONE);
+                    Toast.makeText(getContext(), "Check-Out Success!", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> binding.progressBar.setVisibility(View.GONE));
     }
 
     private String calculateOvertime(String inTime, String outTime) {
