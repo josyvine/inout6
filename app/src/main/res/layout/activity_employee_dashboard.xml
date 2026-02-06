@@ -50,7 +50,6 @@
         app:menu="@menu/bottom_nav_menu_employee" />
 
     <!-- WAITING APPROVAL OVERLAY -->
-    <!-- This covers everything if approved == false in Firestore -->
     <LinearLayout
         android:id="@+id/layout_waiting_approval"
         android:layout_width="match_parent"
@@ -109,5 +108,18 @@
             android:textColor="@android:color/holo_red_dark" />
 
     </LinearLayout>
+
+    <!-- NEW: Global Sync Spinning Loader -->
+    <!-- Triggered after Check-In to indicate UI refresh -->
+    <ProgressBar
+        android:id="@+id/syncProgressBar"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:visibility="gone"
+        android:elevation="10dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
