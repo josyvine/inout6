@@ -3,6 +3,8 @@ package com.inout.app;
 import android.content.Intent;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -37,7 +39,7 @@ import java.util.Map;
  * Main dashboard for Employees.
  * Handles navigation between Check-In/Out and Attendance History.
  * Monitors Admin Approval status and Profile completeness.
- * UPDATED: Handles Emergency Leave, Medical Leave, and Resume logic with real-time menu sync.
+ * UPDATED: Handles Emergency Leave, Medical Leave, and Resume logic with real-time menu sync and spinning loader.
  */
 public class EmployeeDashboardActivity extends AppCompatActivity {
 
@@ -83,7 +85,7 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         FirebaseUser fbUser = mAuth.getCurrentUser();
         if (fbUser == null) return;
 
-        // FIXED: Using snapshot listener to ensure we get the employeeId correctly and stay in sync
+        // Using snapshot listener to ensure we get the employeeId correctly and stay in sync
         userListener = db.collection("users").document(fbUser.getUid()).addSnapshotListener((userDoc, error) -> {
             if (userDoc != null && userDoc.exists()) {
                 currentUser = userDoc.toObject(User.class);
@@ -96,14 +98,22 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                     String recordId = currentUser.getEmployeeId() + "_" + dateId;
 
                     attendanceListener = db.collection("attendance").document(recordId).addSnapshotListener((snapshot, e) -> {
-                        if (snapshot != null && snapshot.exists()) {
+                        // NEW LOGIC: Trigger spinning loader during refresh
+                        if (snapshot != null) {
+                            binding.syncProgressBar.setVisibility(View.VISIBLE);
+                            
                             todayRecord = snapshot.toObject(AttendanceRecord.class);
+                            
+                            // Refresh the Top Menu state
+                            invalidateOptionsMenu(); 
+
+                            // Brief delay to allow UI to settle before hiding loader
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                binding.syncProgressBar.setVisibility(View.GONE);
+                            }, 800);
                         } else {
                             todayRecord = null;
                         }
-                        // CRITICAL: Refresh the Top Menu state immediately when attendance data changes
-                        // This fixes the glitch where Emergency Leave wouldn't enable until another action occurred
-                        invalidateOptionsMenu(); 
                     });
                 }
             }
