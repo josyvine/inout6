@@ -83,17 +83,17 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         FirebaseUser fbUser = mAuth.getCurrentUser();
         if (fbUser == null) return;
 
-        // FIXED: Using snapshot listener to ensure we get the employeeId correctly even if sync is delayed
+        // FIXED: Using snapshot listener to ensure we get the employeeId correctly and stay in sync
         userListener = db.collection("users").document(fbUser.getUid()).addSnapshotListener((userDoc, error) -> {
             if (userDoc != null && userDoc.exists()) {
-                User u = userDoc.toObject(User.class);
-                if (u != null && u.getEmployeeId() != null) {
+                currentUser = userDoc.toObject(User.class);
+                if (currentUser != null && currentUser.getEmployeeId() != null) {
                     
                     // Prevent duplicate listeners
                     if (attendanceListener != null) attendanceListener.remove();
 
                     String dateId = TimeUtils.getCurrentDateId();
-                    String recordId = u.getEmployeeId() + "_" + dateId;
+                    String recordId = currentUser.getEmployeeId() + "_" + dateId;
 
                     attendanceListener = db.collection("attendance").document(recordId).addSnapshotListener((snapshot, e) -> {
                         if (snapshot != null && snapshot.exists()) {
@@ -102,6 +102,7 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                             todayRecord = null;
                         }
                         // CRITICAL: Refresh the Top Menu state immediately when attendance data changes
+                        // This fixes the glitch where Emergency Leave wouldn't enable until another action occurred
                         invalidateOptionsMenu(); 
                     });
                 }
@@ -118,17 +119,19 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
                     if (error != null) return;
 
                     if (snapshot != null && snapshot.exists()) {
-                        currentUser = snapshot.toObject(User.class);
-                        if (currentUser != null) {
-                            if (currentUser.getPhone() == null || currentUser.getPhone().isEmpty() || 
-                                currentUser.getPhotoUrl() == null || currentUser.getPhotoUrl().isEmpty()) {
+                        User user = snapshot.toObject(User.class);
+                        if (user != null) {
+                            // 1. Check if basic profile data is missing
+                            if (user.getPhone() == null || user.getPhone().isEmpty() || 
+                                user.getPhotoUrl() == null || user.getPhotoUrl().isEmpty()) {
 
                                 Toast.makeText(this, "Please complete your profile first.", Toast.LENGTH_SHORT).show();
                                 startActivity(new Intent(this, EmployeeProfileActivity.class));
                                 return;
                             }
 
-                            if (!currentUser.isApproved()) {
+                            // 2. Check for Admin Approval
+                            if (!user.isApproved()) {
                                 showWaitingOverlay(true);
                             } else {
                                 showWaitingOverlay(false);
@@ -172,12 +175,14 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         }
 
         if (medicalItem != null) {
+            // LOGIC FIX: Medical Leave is ONLY clickable if work has NOT started (Check-in is null)
             boolean canMedical = !checkedIn; 
             medicalItem.setEnabled(canMedical);
             if (medicalItem.getIcon() != null) medicalItem.getIcon().setAlpha(canMedical ? 255 : 128);
         }
 
         if (resumeItem != null) {
+            // Resume allowed before check-in for late starts or rejoining after approved leave
             boolean canResume = !checkedIn; 
             resumeItem.setEnabled(canResume);
             if (resumeItem.getIcon() != null) resumeItem.getIcon().setAlpha(canResume ? 255 : 128);
@@ -220,9 +225,11 @@ public class EmployeeDashboardActivity extends AppCompatActivity {
         String dateId = TimeUtils.getCurrentDateId();
         String recordId = currentUser.getEmployeeId() + "_" + dateId;
 
+        // Mark that resume was requested to force-enable check-in buttons in the fragment
         db.collection("attendance").document(recordId)
                 .update("resumeRequested", true)
                 .addOnFailureListener(e -> {
+                    // If record doesn't exist yet, create a shell record with the resume flag
                     AttendanceRecord newRecord = new AttendanceRecord(currentUser.getEmployeeId(), currentUser.getName(), dateId, TimeUtils.getCurrentTimestamp());
                     newRecord.setRecordId(recordId);
                     newRecord.setResumeRequested(true);
