@@ -47,11 +47,15 @@ public class TimeUtils {
     public static boolean isTimeReached(String targetTime) {
         if (targetTime == null || targetTime.isEmpty() || targetTime.equals("N/A")) return true;
         try {
-            Date now = TIME_DISPLAY_FORMAT.parse(TIME_DISPLAY_FORMAT.format(new Date()));
+            // Get current time formatted as HH:mm a, then parse it back to compare correctly
+            String nowStr = TIME_DISPLAY_FORMAT.format(new Date());
+            Date now = TIME_DISPLAY_FORMAT.parse(nowStr);
             Date target = TIME_DISPLAY_FORMAT.parse(targetTime);
+            
             return now != null && (now.after(target) || now.equals(target));
         } catch (ParseException e) {
             Log.e(TAG, "isTimeReached parsing error", e);
+            // Default to true if parsing fails to avoid blocking the user
             return true; 
         }
     }
