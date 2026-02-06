@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Fragment where employees perform Check-In, Transit, and Check-Out.
- * UPDATED: Includes logic for Resume mode, Medical Leave status, and Shift Start Time restriction.
+ * UPDATED: Includes logic for Resume mode, Medical Leave status, and strict Shift Start Time restriction.
  */
 public class EmployeeCheckInFragment extends Fragment {
 
@@ -100,6 +100,7 @@ public class EmployeeCheckInFragment extends Fragment {
                 
                 if (currentUser != null) {
                     binding.tvEmployeeName.setText(currentUser.getName() != null ? currentUser.getName() : "Unknown User");
+                    binding.tvEmployeeName.setVisibility(View.VISIBLE);
                     binding.tvEmployeeId.setText(currentUser.getEmployeeId() != null ? currentUser.getEmployeeId() : "Pending ID");
 
                     String locId = currentUser.getAssignedLocationId();
@@ -154,23 +155,26 @@ public class EmployeeCheckInFragment extends Fragment {
         // Case 1: Start of Day (todayRecord is null OR checkInTime is null but resume was requested)
         if (todayRecord == null || (todayRecord.getCheckInTime() == null && todayRecord.isResumeRequested())) {
             
-            // Logic: Check if current time has reached the assigned shift start time
-            boolean isTimeReached = isShiftTimeReached(currentUser.getShiftStartTime());
-            // Bypass time restriction if Resume mode is active
-            boolean canCheckIn = isTimeReached || (todayRecord != null && todayRecord.isResumeRequested());
-
-            updateButtonState(canCheckIn, false, false);
+            // LOGIC: Check if system time has reached assigned shift start time
+            boolean isTimeReached = TimeUtils.isTimeReached(currentUser.getShiftStartTime());
+            // Resume requested bypasses the time restriction
+            boolean canCheckInGate = isTimeReached || (todayRecord != null && todayRecord.isResumeRequested());
 
             if (todayRecord != null && todayRecord.isResumeRequested()) {
+                updateButtonState(true, false, false);
                 binding.tvStatus.setText("Resume Mode: Ready to Check-In at " + locName);
             } else if (!isTimeReached) {
+                // LOCK: Disable button before shift start time
+                updateButtonState(false, false, false);
                 binding.tvStatus.setText("Shift starts at " + currentUser.getShiftStartTime() + ". Please wait.");
             } else if ("approved".equals(currentUser.getMedicalLeaveStatus())) {
+                updateButtonState(false, false, false);
                 binding.tvStatus.setText("Status: Medical Leave (" + currentUser.getMedicalLeaveType().toUpperCase() + "). Click Resume to work.");
-                updateButtonState(false, false, false); 
             } else if (currentUser.isTraveling()) {
+                updateButtonState(true, false, false);
                 binding.tvStatus.setText("Status: Traveling Mode Enabled. Ready to Start.");
             } else {
+                updateButtonState(true, false, false);
                 binding.tvStatus.setText("Status: Ready to Check-In at " + locName);
             }
             
@@ -197,21 +201,6 @@ public class EmployeeCheckInFragment extends Fragment {
             // Case 3: Shift Completed
             updateButtonState(false, false, false);
             binding.tvStatus.setText("Status: Shift Completed (" + todayRecord.getTotalHours() + ")");
-        }
-    }
-
-    /**
-     * Logic: Verifies if the current system time is at or after the assigned shift start time.
-     */
-    private boolean isShiftTimeReached(String shiftStart) {
-        if (shiftStart == null || shiftStart.isEmpty() || shiftStart.equals("N/A")) return true;
-        try {
-            SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.US);
-            Date now = sdf.parse(sdf.format(new Date()));
-            Date start = sdf.parse(shiftStart);
-            return now != null && (now.after(start) || now.equals(start));
-        } catch (Exception e) {
-            return true; // Default to true if parsing fails to avoid blocking users
         }
     }
 
