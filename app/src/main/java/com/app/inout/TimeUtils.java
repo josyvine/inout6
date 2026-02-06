@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Utility class for Date and Time formatting and calculations.
+ * UPDATED: Added logic to verify if a specific time (Shift Start) has been reached.
  */
 public class TimeUtils {
 
@@ -39,6 +40,23 @@ public class TimeUtils {
     }
 
     /**
+     * Logic: Compares current system time with a target time string.
+     * @param targetTime The shift start time (e.g. "09:00 AM").
+     * @return true if current time is >= target time.
+     */
+    public static boolean isTimeReached(String targetTime) {
+        if (targetTime == null || targetTime.isEmpty() || targetTime.equals("N/A")) return true;
+        try {
+            Date now = TIME_DISPLAY_FORMAT.parse(TIME_DISPLAY_FORMAT.format(new Date()));
+            Date target = TIME_DISPLAY_FORMAT.parse(targetTime);
+            return now != null && (now.after(target) || now.equals(target));
+        } catch (ParseException e) {
+            Log.e(TAG, "isTimeReached parsing error", e);
+            return true; 
+        }
+    }
+
+    /**
      * @return Current full timestamp for sorting.
      */
     public static long getCurrentTimestamp() {
@@ -47,24 +65,17 @@ public class TimeUtils {
 
     /**
      * Calculates the duration between two time strings (e.g., "09:00 AM" and "05:00 PM").
-     *
-     * @param checkInTimeStr  The check-in time string.
-     * @param checkOutTimeStr The check-out time string.
-     * @return A formatted string like "8h 00m" or "N/A" if parsing fails.
      */
     public static String calculateDuration(String checkInTimeStr, String checkOutTimeStr) {
         if (checkInTimeStr == null || checkOutTimeStr == null) return "0h 00m";
 
         try {
-            // We need to parse relative to the same day to get the difference
-            // Since the input is just time (HH:mm a), we use a dummy date.
             Date checkIn = TIME_DISPLAY_FORMAT.parse(checkInTimeStr);
             Date checkOut = TIME_DISPLAY_FORMAT.parse(checkOutTimeStr);
 
             if (checkIn != null && checkOut != null) {
                 long diffMillis = checkOut.getTime() - checkIn.getTime();
 
-                // Handle case where checkout is next day (though unlikely in this flow, good for safety)
                 if (diffMillis < 0) {
                     diffMillis += TimeUnit.DAYS.toMillis(1);
                 }
