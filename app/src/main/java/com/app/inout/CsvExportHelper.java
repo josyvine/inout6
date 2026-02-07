@@ -18,7 +18,7 @@ import java.util.List;
 
 /**
  * Utility to generate and share professional attendance reports.
- * UPDATED: Handles 14-column layout with complex logic for Medical Leave (Paid/Unpaid) and Resume (Late Start).
+ * UPDATED: Handles 14-column layout with strict logic for Late Starts, Resume, and Paid Medical Leave.
  */
 public class CsvExportHelper {
 
@@ -37,9 +37,9 @@ public class CsvExportHelper {
         for (AttendanceRecord record : records) {
             String date = record.getDate();
             String day = record.getDayOfWeek();
-            String in = (record.getCheckInTime() != null) ? record.getCheckInTime() : "--";
+            String inTime = (record.getCheckInTime() != null) ? record.getCheckInTime() : "--";
             String transit = record.getTransitSummary();
-            String out = (record.getCheckOutTime() != null) ? record.getCheckOutTime() : "--";
+            String outTime = (record.getCheckOutTime() != null) ? record.getCheckOutTime() : "--";
             String shiftInfo = (record.getAssignedShift() != null) ? record.getAssignedShift() : "--";
             String overtime = (record.getOvertimeHours() != null) ? record.getOvertimeHours() : "--";
             String location = (record.getLocationName() != null) ? record.getLocationName() : "N/A";
@@ -48,10 +48,11 @@ public class CsvExportHelper {
             String finger = record.isFingerprintVerified() ? "YES" : "NO";
             String gps = record.isGpsVerified() ? "YES" : "NO";
             
-            // LOGIC SETUP
+            // LOGIC CONSTANTS
             String status = record.getStatus();
             String hours = (record.getTotalHours() != null) ? record.getTotalHours() : "0h 00m";
             String remarks = (record.getRemarks() != null) ? record.getRemarks() : "";
+            String shiftDuration = calculateShiftDuration(shiftInfo);
 
             // SCENARIO 1: Emergency Leave (Not Resumed)
             if (record.getEmergencyLeaveTime() != null && record.getCheckOutTime() == null) {
@@ -59,31 +60,30 @@ public class CsvExportHelper {
                 hours = TimeUtils.calculateDuration(record.getCheckInTime(), record.getEmergencyLeaveTime());
             }
 
-            // SCENARIO 2: Resumed Work (Check-Out exists)
+            // SCENARIO 2: Resumed Work / Late Start (Check-Out exists)
             if (record.getCheckOutTime() != null) {
-                String shiftDuration = calculateShiftDuration(shiftInfo);
                 
-                // If it was Paid Medical Leave and they resumed work
+                // Case: Paid Medical Leave (Give full shift credit)
                 if ("paid".equals(record.getMedicalLeaveType())) {
-                    hours = shiftDuration; // Record as normal working hours
+                    hours = shiftDuration;
                 } 
-                // If it was a Resume (Late on duty or Unpaid Medical)
+                // Case: Late Start / Resume (Record discrepancy in remarks)
                 else if (record.isResumeRequested()) {
-                    String lateRemark = " | Checked out after " + hours + " (Assigned: " + shiftDuration + ")";
-                    if ("none".equals(record.getMedicalLeaveType()) || record.getMedicalLeaveType() == null) {
-                        remarks += " | Late Start" + lateRemark;
-                    } else {
-                        remarks += lateRemark;
+                    String lateDetail = "Late on duty. Worked " + hours + " of assigned " + shiftDuration;
+                    if (remarks.isEmpty()) {
+                        remarks = lateDetail;
+                    } else if (!remarks.contains("Late")) {
+                        remarks = remarks + " | " + lateDetail;
                     }
                 }
             }
 
-            // Append row to string (Wrap multi-word strings in quotes)
+            // Append row to string (Wrap multi-word strings in quotes to handle commas)
             csvData.append(date).append(",")
                     .append(day).append(",")
-                    .append(in).append(",")
+                    .append(inTime).append(",")
                     .append("\"").append(transit).append("\",")
-                    .append(out).append(",")
+                    .append(outTime).append(",")
                     .append(shiftInfo).append(",")
                     .append(hours).append(",")
                     .append(overtime).append(",")
@@ -95,7 +95,7 @@ public class CsvExportHelper {
                     .append("\"").append(remarks).append("\"\n");
         }
 
-        // 3. Save and Share
+        // 3. Save and Share logic
         try {
             File folder = new File(context.getCacheDir(), "reports");
             if (!folder.exists()) folder.mkdirs();
@@ -108,13 +108,13 @@ public class CsvExportHelper {
             shareCsvFile(context, file);
 
         } catch (IOException e) {
-            Log.e(TAG, "CSV Generation failed", e);
-            Toast.makeText(context, "Error generating CSV file", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "CSV Export failed", e);
+            Toast.makeText(context, "Error generating report", Toast.LENGTH_SHORT).show();
         }
     }
 
     /**
-     * Helper to extract duration from a shift string like "09:00 AM - 06:00 PM"
+     * Helper to calculate the duration of a shift string like "02:25 PM - 02:30 PM"
      */
     private static String calculateShiftDuration(String shiftStr) {
         if (shiftStr == null || !shiftStr.contains("-")) return "0h 00m";
@@ -133,7 +133,7 @@ public class CsvExportHelper {
         Uri path = FileProvider.getUriForFile(context, "com.inout.app.fileprovider", file);
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("text/csv");
-        intent.putExtra(Intent.EXTRA_SUBJECT, "Attendance Report Export");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Attendance Report");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.putExtra(Intent.EXTRA_STREAM, path);
         context.startActivity(Intent.createChooser(intent, "Export Report via:"));
