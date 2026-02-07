@@ -35,8 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Fragment where employees perform Check-In, Transit, and Check-Out.
- * UPDATED: Includes logic for Resume mode, Medical Leave status, and strict Shift Start Time restriction.
- * Coordinated with Activity for automatic UI refresh and spinning loaders.
+ * UPDATED: Enforces a 15-minute window for check-in. If late, forces use of 'Resume' menu.
  */
 public class EmployeeCheckInFragment extends Fragment {
 
@@ -124,7 +123,6 @@ public class EmployeeCheckInFragment extends Fragment {
             if (doc.exists()) {
                 assignedLocation = doc.toObject(CompanyConfig.class);
                 assignedLocation.setId(doc.getId());
-                Log.d(TAG, "Assigned to: " + assignedLocation.getName());
                 updateUIBasedOnStatus();
             } else {
                 binding.tvStatus.setText("Status: Workplace record not found.");
@@ -152,31 +150,39 @@ public class EmployeeCheckInFragment extends Fragment {
         if (currentUser == null || assignedLocation == null) return;
 
         String locName = assignedLocation.getName();
+        String shiftStart = currentUser.getShiftStartTime();
 
         // Case 1: Start of Day (todayRecord is null OR checkInTime is null but resume was requested)
         if (todayRecord == null || (todayRecord.getCheckInTime() == null && todayRecord.isResumeRequested())) {
             
-            // Logic: Check if system time has reached assigned shift start time
-            boolean isTimeReached = isShiftTimeReached(currentUser.getShiftStartTime());
-            // Resume requested bypasses the time restriction
-            boolean canCheckInGate = isTimeReached || (todayRecord != null && todayRecord.isResumeRequested());
+            // Logic Gate: Check if current time is within the allowed window
+            boolean isTimeReached = TimeUtils.isTimeReached(shiftStart);
+            boolean isLate = TimeUtils.isPastGracePeriod(shiftStart, 15); // 15 mins window
+            
+            // Logic Bypass: Resume flag or traveling mode
+            boolean resumeEnabled = (todayRecord != null && todayRecord.isResumeRequested());
 
-            if (todayRecord != null && todayRecord.isResumeRequested()) {
+            if (resumeEnabled) {
                 updateButtonState(true, false, false);
                 binding.tvStatus.setText("Resume Mode: Ready to Check-In at " + locName);
             } else if (!isTimeReached) {
-                // LOCK: Disable button before shift start time
                 updateButtonState(false, false, false);
-                binding.tvStatus.setText("Shift starts at " + currentUser.getShiftStartTime() + ". Please wait.");
+                binding.tvStatus.setText("Shift starts at " + shiftStart + ". Please wait.");
+            } else if (isLate) {
+                // BLOCK: Past 15 minutes grace period
+                updateButtonState(false, false, false);
+                binding.tvStatus.setText("You are late. Please click 'Resume' from the menu to check in.");
             } else if ("approved".equals(currentUser.getMedicalLeaveStatus())) {
                 updateButtonState(false, false, false);
                 binding.tvStatus.setText("Status: Medical Leave (" + currentUser.getMedicalLeaveType().toUpperCase() + "). Click Resume to work.");
-            } else if (currentUser.isTraveling()) {
-                updateButtonState(true, false, false);
-                binding.tvStatus.setText("Status: Traveling Mode Enabled. Ready to Start.");
             } else {
+                // ON TIME: Between Start and Start + 15 mins
                 updateButtonState(true, false, false);
-                binding.tvStatus.setText("Status: Ready to Check-In at " + locName);
+                if (currentUser.isTraveling()) {
+                    binding.tvStatus.setText("Status: Traveling Mode Enabled. Ready to Start.");
+                } else {
+                    binding.tvStatus.setText("Status: Ready to Check-In at " + locName);
+                }
             }
             
         } else if (todayRecord.getCheckOutTime() == null || todayRecord.getCheckOutTime().isEmpty()) {
@@ -202,21 +208,6 @@ public class EmployeeCheckInFragment extends Fragment {
             // Case 3: Shift Completed
             updateButtonState(false, false, false);
             binding.tvStatus.setText("Status: Shift Completed (" + todayRecord.getTotalHours() + ")");
-        }
-    }
-
-    /**
-     * Logic: Verifies if the current system time is at or after the assigned shift start time.
-     */
-    private boolean isShiftTimeReached(String shiftStart) {
-        if (shiftStart == null || shiftStart.isEmpty() || shiftStart.equals("N/A")) return true;
-        try {
-            SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.US);
-            Date now = sdf.parse(sdf.format(new Date()));
-            Date start = sdf.parse(shiftStart);
-            return now != null && (now.after(start) || now.equals(start));
-        } catch (Exception e) {
-            return true; // Default to true if parsing fails to avoid blocking users
         }
     }
 
@@ -256,7 +247,6 @@ public class EmployeeCheckInFragment extends Fragment {
                             assignedLocation.getLatitude(), assignedLocation.getLongitude(),
                             assignedLocation.getRadius());
 
-                    // Traveling Mode Bypass
                     if (actionType == ACTION_IN && currentUser.isTraveling()) {
                         performCheckIn(location, 0, true); 
                     } 
@@ -286,9 +276,6 @@ public class EmployeeCheckInFragment extends Fragment {
         });
     }
 
-    /**
-     * @param isRemoteStart If true, user is checking in from home/travel, not the office.
-     */
     private void performCheckIn(Location loc, float distance, boolean isRemoteStart) {
         String dateId = TimeUtils.getCurrentDateId();
         String recordId = currentUser.getEmployeeId() + "_" + dateId;
