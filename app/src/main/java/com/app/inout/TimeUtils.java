@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Utility class for Date and Time formatting and calculations.
- * UPDATED: Added logic to verify if a specific time (Shift Start) has been reached.
+ * UPDATED: Added logic to verify if the grace period for check-in has expired.
  */
 public class TimeUtils {
 
@@ -55,9 +55,33 @@ public class TimeUtils {
             return now != null && (now.after(target) || now.equals(target));
         } catch (ParseException e) {
             Log.e(TAG, "isTimeReached parsing error", e);
-            // Default to true if parsing fails to avoid blocking the user
             return true; 
         }
+    }
+
+    /**
+     * Logic: Checks if the current time has passed the start time plus a grace period.
+     * @param targetTime The shift start time.
+     * @param graceMinutes Minutes allowed before being considered "Late".
+     * @return true if current time is beyond the grace period.
+     */
+    public static boolean isPastGracePeriod(String targetTime, int graceMinutes) {
+        if (targetTime == null || targetTime.isEmpty() || targetTime.equals("N/A")) return false;
+        try {
+            String nowStr = TIME_DISPLAY_FORMAT.format(new Date());
+            Date now = TIME_DISPLAY_FORMAT.parse(nowStr);
+            Date target = TIME_DISPLAY_FORMAT.parse(targetTime);
+
+            if (now != null && target != null) {
+                long diffMillis = now.getTime() - target.getTime();
+                long diffMinutes = TimeUnit.MILLISECONDS.toMinutes(diffMillis);
+                // Return true only if we are significantly late (past grace period)
+                return diffMinutes > graceMinutes;
+            }
+        } catch (ParseException e) {
+            Log.e(TAG, "isPastGracePeriod error", e);
+        }
+        return false;
     }
 
     /**
