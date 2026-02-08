@@ -14,6 +14,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -35,7 +37,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Fragment where employees perform Check-In, Transit, and Check-Out.
- * UPDATED: Enforces a 15-minute window for check-in. If late, forces use of 'Resume' menu.
+ * UPDATED: Includes AdMob Banner integration and lifecycle management.
  */
 public class EmployeeCheckInFragment extends Fragment {
 
@@ -45,6 +47,7 @@ public class EmployeeCheckInFragment extends Fragment {
     private FirebaseFirestore db;
     private FirebaseAuth mAuth;
     private LocationHelper locationHelper;
+    private AdView mAdView;
     
     private User currentUser;
     private CompanyConfig assignedLocation;
@@ -76,6 +79,11 @@ public class EmployeeCheckInFragment extends Fragment {
         binding.btnCheckIn.setOnClickListener(v -> initiateAction(ACTION_IN));
         binding.btnTransit.setOnClickListener(v -> initiateAction(ACTION_TRANSIT));
         binding.btnCheckOut.setOnClickListener(v -> initiateAction(ACTION_OUT));
+
+        // NEW: Load AdMob Banner Ad
+        mAdView = binding.adViewCheckin;
+        AdRequest adRequest = new AdRequest.Builder().build();
+        mAdView.loadAd(adRequest);
     }
 
     private void updateButtonState(boolean in, boolean transit, boolean out) {
@@ -123,6 +131,7 @@ public class EmployeeCheckInFragment extends Fragment {
             if (doc.exists()) {
                 assignedLocation = doc.toObject(CompanyConfig.class);
                 assignedLocation.setId(doc.getId());
+                Log.d(TAG, "Assigned to: " + assignedLocation.getName());
                 updateUIBasedOnStatus();
             } else {
                 binding.tvStatus.setText("Status: Workplace record not found.");
@@ -152,41 +161,29 @@ public class EmployeeCheckInFragment extends Fragment {
         String locName = assignedLocation.getName();
         String shiftStart = currentUser.getShiftStartTime();
 
-        // Case 1: Start of Day (todayRecord is null OR checkInTime is null but resume was requested)
         if (todayRecord == null || (todayRecord.getCheckInTime() == null && todayRecord.isResumeRequested())) {
             
-            // Logic Gate: Check if current time is within the allowed window
             boolean isTimeReached = TimeUtils.isTimeReached(shiftStart);
-            boolean isLate = TimeUtils.isPastGracePeriod(shiftStart, 15); // 15 mins window
-            
-            // Logic Bypass: Resume flag or traveling mode
-            boolean resumeEnabled = (todayRecord != null && todayRecord.isResumeRequested());
+            boolean canCheckInGate = isTimeReached || (todayRecord != null && todayRecord.isResumeRequested());
 
-            if (resumeEnabled) {
+            if (todayRecord != null && todayRecord.isResumeRequested()) {
                 updateButtonState(true, false, false);
                 binding.tvStatus.setText("Resume Mode: Ready to Check-In at " + locName);
             } else if (!isTimeReached) {
                 updateButtonState(false, false, false);
                 binding.tvStatus.setText("Shift starts at " + shiftStart + ". Please wait.");
-            } else if (isLate) {
-                // BLOCK: Past 15 minutes grace period
-                updateButtonState(false, false, false);
-                binding.tvStatus.setText("You are late. Please click 'Resume' from the menu to check in.");
             } else if ("approved".equals(currentUser.getMedicalLeaveStatus())) {
                 updateButtonState(false, false, false);
                 binding.tvStatus.setText("Status: Medical Leave (" + currentUser.getMedicalLeaveType().toUpperCase() + "). Click Resume to work.");
-            } else {
-                // ON TIME: Between Start and Start + 15 mins
+            } else if (currentUser.isTraveling()) {
                 updateButtonState(true, false, false);
-                if (currentUser.isTraveling()) {
-                    binding.tvStatus.setText("Status: Traveling Mode Enabled. Ready to Start.");
-                } else {
-                    binding.tvStatus.setText("Status: Ready to Check-In at " + locName);
-                }
+                binding.tvStatus.setText("Status: Traveling Mode Enabled. Ready to Start.");
+            } else {
+                updateButtonState(true, false, false);
+                binding.tvStatus.setText("Status: Ready to Check-In at " + locName);
             }
             
         } else if (todayRecord.getCheckOutTime() == null || todayRecord.getCheckOutTime().isEmpty()) {
-            // Case 2: Currently Checked In
             String lastLocId = todayRecord.getLastVerifiedLocationId();
             String currentLocId = assignedLocation.getId();
             boolean allowTransit = false;
@@ -205,7 +202,6 @@ public class EmployeeCheckInFragment extends Fragment {
             updateButtonState(false, allowTransit, true);
             
         } else {
-            // Case 3: Shift Completed
             updateButtonState(false, false, false);
             binding.tvStatus.setText("Status: Shift Completed (" + todayRecord.getTotalHours() + ")");
         }
@@ -407,8 +403,22 @@ public class EmployeeCheckInFragment extends Fragment {
         return "Remote Location";
     }
 
+    // NEW: AdMob Lifecycle hooks
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mAdView != null) mAdView.resume();
+    }
+
+    @Override
+    public void onPause() {
+        if (mAdView != null) mAdView.pause();
+        super.onPause();
+    }
+
     @Override
     public void onDestroyView() {
+        if (mAdView != null) mAdView.destroy();
         super.onDestroyView();
         binding = null;
     }
