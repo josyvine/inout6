@@ -11,6 +11,8 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -34,6 +36,7 @@ import com.inout.app.utils.EncryptionHelper;
  * ZERO BILLING DESIGN:
  * - Retrieves Google Profile Photo URL directly from the Auth object.
  * - Saves the URL as a string in Firestore.
+ * UPDATED: Integrated AdMob Banner Ad in the footer.
  */
 public class LoginActivity extends AppCompatActivity {
 
@@ -43,6 +46,7 @@ public class LoginActivity extends AppCompatActivity {
     private GoogleSignInClient mGoogleSignInClient;
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
+    private AdView mAdView;
     
     private String expectedRole;
 
@@ -98,6 +102,11 @@ public class LoginActivity extends AppCompatActivity {
         binding.tvLoginSubtitle.setText("Role: " + (expectedRole != null ? expectedRole.toUpperCase() : "UNKNOWN"));
 
         binding.btnGoogleSignIn.setOnClickListener(v -> signIn());
+
+        // NEW: Load AdMob Banner Ad
+        mAdView = findViewById(R.id.adView_login);
+        AdRequest adRequest = new AdRequest.Builder().build();
+        mAdView.loadAd(adRequest);
     }
 
     @Override
@@ -170,7 +179,7 @@ public class LoginActivity extends AppCompatActivity {
             newUser.setName(firebaseUser.getDisplayName());
         }
 
-        // **ZERO BILLING FIX:** Set photoUrl from Google Auth profile
+        // ZERO BILLING FIX: Set photoUrl from Google Auth profile
         if (firebaseUser.getPhotoUrl() != null) {
             newUser.setPhotoUrl(firebaseUser.getPhotoUrl().toString());
         }
@@ -210,5 +219,24 @@ public class LoginActivity extends AppCompatActivity {
     private void updateUI(FirebaseUser user) {
         binding.progressBar.setVisibility(View.GONE);
         binding.btnGoogleSignIn.setVisibility(View.VISIBLE);
+    }
+
+    // NEW: Lifecycle methods for AdView
+    @Override
+    public void onPause() {
+        if (mAdView != null) mAdView.pause();
+        super.onPause();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mAdView != null) mAdView.resume();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (mAdView != null) mAdView.destroy();
+        super.onDestroy();
     }
 }
