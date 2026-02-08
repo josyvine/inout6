@@ -2,6 +2,12 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- NEW: Option for Admin to contact the developer for feedback -->
+    <item
+        android:id="@+id/action_contact_dev"
+        android:title="Contact Dev"
+        app:showAsAction="never" />
+
     <!-- Option to return to the setup screen to manage a different company -->
     <item
         android:id="@+id/action_switch_company"
