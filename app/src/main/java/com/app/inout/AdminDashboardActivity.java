@@ -54,7 +54,7 @@ public class AdminDashboardActivity extends AppCompatActivity {
         }
     }
 
-    // Create the top options menu (e.g., Logout)
+    // Create the top options menu
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.admin_top_menu, menu);
@@ -70,12 +70,24 @@ public class AdminDashboardActivity extends AppCompatActivity {
         } else if (item.getItemId() == R.id.action_switch_company) {
             switchCompany();
             return true;
+        } else if (item.getItemId() == R.id.action_contact_dev) {
+            // NEW: Launch the Contact Developer popup
+            showContactDevDialog();
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
     /**
-     * UPDATED: Full Logout Logic.
+     * NEW: Initializes and displays the feedback form for the developer.
+     */
+    private void showContactDevDialog() {
+        ContactDevDialog dialog = new ContactDevDialog();
+        dialog.show(getSupportFragmentManager(), "ContactDevDialog");
+    }
+
+    /**
+     * Full Logout Logic.
      * 1. Signs out of Firebase.
      * 2. Signs out of Google (forces account picker for next login).
      * 3. Clears the "Admin" role from local storage.
