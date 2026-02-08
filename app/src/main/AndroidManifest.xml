@@ -23,6 +23,11 @@
         android:theme="@style/AppTheme"
         tools:targetApi="31">
 
+        <!-- NEW: Google AdMob App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-2223803405403727~1196967211"/>
+
         <!-- 1. Splash Screen -->
         <activity
             android:name=".SplashActivity"
@@ -43,7 +48,7 @@
         <activity android:name=".EmployeeProfileActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".EmployeeDashboardActivity" android:exported="false" android:screenOrientation="portrait" />
 
-        <!-- FILE PROVIDER (NEW): Required for QR Image Sharing -->
+        <!-- FILE PROVIDER: Required for QR Image Sharing -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.inout.app.fileprovider"
